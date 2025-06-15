@@ -22,6 +22,19 @@ A Model Context Protocol (MCP) server for readonly communication with Vertica da
 
 ## Installation
 
+### From npm (Recommended)
+
+The easiest way to use this MCP server is via npm:
+
+```bash
+# Run directly with npx (no installation required)
+npx @hechtcarmel/vertica-mcp
+
+# Or install globally
+npm install -g @hechtcarmel/vertica-mcp
+vertica-mcp
+```
+
 ### From Source
 
 1. Clone the repository:
@@ -85,6 +98,41 @@ Add the following to your Claude Desktop configuration file:
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
 
+#### Option 1: Using npx with .env file (Recommended)
+```json
+{
+  "mcpServers": {
+    "vertica-mcp": {
+      "command": "npx",
+      "args": ["@hechtcarmel/vertica-mcp"],
+      "cwd": "/path/to/your/env/file/directory"
+    }
+  }
+}
+```
+
+Then create a `.env` file in the specified directory:
+```env
+# Required: Vertica Database Connection
+VERTICA_HOST=localhost
+VERTICA_PORT=5433
+VERTICA_DATABASE=VMart
+VERTICA_USER=dbadmin
+VERTICA_PASSWORD=your_password
+
+# Optional: Connection Pool Settings
+VERTICA_CONNECTION_LIMIT=10
+VERTICA_QUERY_TIMEOUT=30000
+
+# Optional: SSL Settings
+VERTICA_SSL=false
+VERTICA_SSL_REJECT_UNAUTHORIZED=true
+
+# Optional: Default Schema
+VERTICA_DEFAULT_SCHEMA=public
+```
+
+#### Option 3: From source (development)
 ```json
 {
   "mcpServers": {
@@ -105,13 +153,32 @@ Add the following to your Claude Desktop configuration file:
 
 ### Using with Cursor
 
+#### Option 1: Using npx with .env file (Recommended)
+1. Create a `.env` file in a directory (e.g., `~/.cursor/vertica.env`)
+2. Add your Vertica connection details to the `.env` file
+3. In Cursor settings, add a new MCP server:
+   - **Name**: `vertica-mcp`
+   - **Command**: `npx`
+   - **Arguments**: `["@hechtcarmel/vertica-mcp"]`
+   - **Working Directory**: Path to directory containing your `.env` file
+
+#### Option 2: Using npx with inline environment variables
+1. Open Cursor settings
+2. Navigate to Features → MCP Servers  
+3. Add a new server with:
+   - **Name**: `vertica-mcp`
+   - **Command**: `npx`
+   - **Arguments**: `["@hechtcarmel/vertica-mcp"]`
+   - **Environment variables**: Add your database connection details
+
+#### Option 3: From source (development)
 1. Open Cursor settings
 2. Navigate to Features → MCP Servers
 3. Add a new server with:
-   - Name: `vertica-mcp`
-   - Command: `node`
-   - Arguments: `["/path/to/vertica-mcp/dist/index.js"]`
-   - Environment variables as needed
+   - **Name**: `vertica-mcp`
+   - **Command**: `node`
+   - **Arguments**: `["/path/to/vertica-mcp/dist/index.js"]`
+   - **Environment variables**: Add your database connection details
 
 ## Available Tools
 
@@ -414,6 +481,69 @@ For issues and questions:
 1. Check the troubleshooting section above
 2. Review Vertica documentation for database-specific issues
 3. Open an issue on the project repository with detailed information
+
+## Quick Start Examples
+
+### Example 1: Cursor with .env file (Recommended)
+1. Create `~/.cursor/vertica.env`:
+```env
+VERTICA_HOST=your-vertica-host.com
+VERTICA_PORT=5433
+VERTICA_DATABASE=your_database
+VERTICA_USER=your_username
+VERTICA_PASSWORD=your_password
+VERTICA_DEFAULT_SCHEMA=public
+```
+
+2. Edit `~/.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "vertica-mcp": {
+      "command": "npx",
+      "args": ["@hechtcarmel/vertica-mcp"],
+      "cwd": "/Users/yourusername/.cursor"
+    }
+  }
+}
+```
+
+### Example 2: Claude Desktop with .env file
+1. Create `~/.config/claude/vertica.env`:
+```env
+VERTICA_HOST=your-vertica-host.com
+VERTICA_PORT=5433
+VERTICA_DATABASE=your_database
+VERTICA_USER=your_username
+VERTICA_PASSWORD=your_password
+VERTICA_DEFAULT_SCHEMA=public
+```
+
+2. Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "vertica-mcp": {
+      "command": "npx",
+      "args": ["@hechtcarmel/vertica-mcp"],
+      "cwd": "/Users/yourusername/.config/claude"
+    }
+  }
+}
+```
+
+### Example 3: Direct usage
+```bash
+# Set environment variables and run
+export VERTICA_HOST=your-host.com
+export VERTICA_PORT=5433
+export VERTICA_DATABASE=your_db
+export VERTICA_USER=your_user
+export VERTICA_PASSWORD=your_password
+
+# Run the MCP server
+npx @hechtcarmel/vertica-mcp
+```
 
 ---
 
