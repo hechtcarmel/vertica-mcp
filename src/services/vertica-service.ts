@@ -381,15 +381,15 @@ export class VerticaService {
     // This query gets projection information which serves a similar purpose
     const query = `
       SELECT 
-        projection_name as index_name,
-        anchor_table_name as table_name,
-        projection_column_name as column_name,
-        is_key,
-        sort_position
+        p.projection_name as index_name,
+        p.anchor_table_name as table_name,
+        pc.projection_column_name as column_name,
+        p.is_key_constraint_projection,
+        pc.sort_position
       FROM v_catalog.projection_columns pc
       JOIN v_catalog.projections p ON pc.projection_id = p.projection_id
       WHERE p.projection_schema = ? AND p.anchor_table_name = ?
-      ORDER BY projection_name, sort_position
+      ORDER BY p.projection_name, pc.sort_position
     `;
 
     const result = await this.executeQuery(query, [schema, tableName]);
@@ -398,7 +398,9 @@ export class VerticaService {
       indexName: row.index_name as string,
       tableName: row.table_name as string,
       columnName: row.column_name as string,
-      isUnique: row.is_key === "t",
+      isUnique:
+        row.is_key_constraint_projection === "t" ||
+        row.is_key_constraint_projection === true,
       indexType: "projection",
       ordinalPosition: row.sort_position as number,
     }));

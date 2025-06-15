@@ -42,7 +42,7 @@ export default class ListIndexesTool extends MCPTool<ListIndexesInput> {
           {
             success: true,
             table: input.tableName,
-            schema: input.schemaName || config.defaultSchema || "public",
+            schema: input.schemaName ?? config.defaultSchema ?? "public",
             indexCount: indexes.length,
             indexes: indexes.map((index) => ({
               indexName: index.indexName,
