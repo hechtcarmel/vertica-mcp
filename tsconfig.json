@@ -2,12 +2,14 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "Node",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
@@ -20,7 +22,8 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": false,
     "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true
   },
   "include": [
     "src/**/*"

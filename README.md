@@ -238,16 +238,47 @@ The server enforces readonly operations by validating that all queries start wit
 ```
 vertica-mcp/
 ├── src/
+│   ├── base/            # Base classes and abstractions
 │   ├── config/          # Configuration management
+│   ├── constants/       # Application constants
 │   ├── services/        # Database service layer
 │   ├── tools/           # MCP tool implementations
 │   ├── types/           # TypeScript type definitions
+│   ├── utils/           # Utility functions and helpers
 │   └── index.ts         # Main server entry point
 ├── dist/                # Compiled output
 ├── package.json         # Dependencies and scripts
 ├── tsconfig.json        # TypeScript configuration
 └── README.md           # This file
 ```
+
+### Code Architecture
+
+This project follows modern TypeScript best practices and clean architecture principles:
+
+#### **Base Classes**
+- `BaseTool`: Abstract base class for all MCP tools that provides:
+  - Consistent error handling and response formatting
+  - Automatic service lifecycle management (connection/cleanup)
+  - Input validation utilities
+  - Reduced code duplication across tools
+
+#### **Utility Modules**
+- `response-formatter.ts`: Standardized API response formatting
+- `table-helpers.ts`: Reusable table and schema operations
+- Constants are centralized to eliminate magic numbers/strings
+
+#### **Error Handling**
+- Structured error types with detailed context
+- Consistent error responses across all tools
+- Proper TypeScript error typing
+
+#### **Code Quality Features**
+- **DRY Principle**: Eliminated code duplication through base classes and utilities
+- **Type Safety**: Comprehensive TypeScript types with minimal `any` usage
+- **Separation of Concerns**: Clear separation between business logic, utilities, and infrastructure
+- **Input Validation**: Centralized validation for SQL identifiers and parameters
+- **Resource Management**: Automatic cleanup of database connections
 
 ### Building
 
@@ -261,6 +292,12 @@ pnpm run typecheck
 
 # Development with watch mode
 pnpm run dev
+
+# Check code quality (typecheck + build)
+pnpm run check
+
+# Test connection with local settings
+pnpm run test:connection
 ```
 
 ### Testing
@@ -350,9 +387,22 @@ VERTICA_HOST=testhost pnpm start
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/new-feature`
-3. Make your changes following the existing code style
-4. Test thoroughly with a real Vertica database
-5. Submit a pull request with a clear description
+3. Make your changes following the existing code style and architecture
+4. Run code quality checks: `pnpm run check`
+5. Test thoroughly with a real Vertica database
+6. Submit a pull request with a clear description
+
+### Development Guidelines
+
+When contributing to this project, please follow these guidelines:
+
+- **Use the BaseTool class**: All new tools should extend `BaseTool` for consistency
+- **Add constants**: Put magic numbers/strings in `src/constants/index.ts`
+- **Create utilities**: Extract reusable logic into `src/utils/` modules
+- **Type everything**: Use TypeScript types extensively, avoid `any`
+- **Validate inputs**: Use the validation utilities in `table-helpers.ts`
+- **Handle errors properly**: Use structured error types from `src/types/errors.ts`
+- **Follow DRY principles**: Reuse existing utilities and formatters
 
 ## License
 

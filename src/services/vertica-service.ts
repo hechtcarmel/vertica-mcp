@@ -1,4 +1,26 @@
 import vertica from "vertica-nodejs";
+import type {
+  VerticaConfig,
+  QueryResult,
+  TableStructure,
+  ColumnInfo,
+  ConstraintInfo,
+  IndexInfo,
+  ViewInfo,
+  TableInfo,
+  StreamQueryOptions,
+  StreamQueryResult,
+} from "../types/vertica.js";
+import {
+  READONLY_QUERY_PREFIXES,
+  SSL_MODES,
+  LOG_MESSAGES,
+} from "../constants/index.js";
+import {
+  determineTableType,
+  resolveSchemaName,
+} from "../utils/table-helpers.js";
+
 type Connection = any;
 
 // Type declaration for vertica-nodejs CommonJS module
@@ -13,29 +35,10 @@ interface VerticaModule {
 
 const verticaTyped = vertica as any as VerticaModule;
 
-import type {
-  VerticaConfig,
-  QueryResult,
-  TableStructure,
-  ColumnInfo,
-  ConstraintInfo,
-  IndexInfo,
-  ViewInfo,
-  TableInfo,
-  StreamQueryOptions,
-  StreamQueryResult,
-} from "../types/vertica.js";
-
 export class VerticaService {
   private config: VerticaConfig;
   private connection: Connection | null = null;
-  private readonly readonlyQueryPrefixes = [
-    "SELECT",
-    "SHOW",
-    "DESCRIBE",
-    "EXPLAIN",
-    "WITH",
-  ];
+  private readonly readonlyQueryPrefixes = READONLY_QUERY_PREFIXES;
 
   constructor(config: VerticaConfig) {
     this.config = config;
@@ -61,15 +64,15 @@ export class VerticaService {
 
       // Add SSL/TLS configuration if specified
       if (this.config.ssl) {
-        clientConfig.tls_mode = "require";
+        clientConfig.tls_mode = SSL_MODES.REQUIRE;
         if (this.config.sslRejectUnauthorized !== undefined) {
           // Note: Vertica uses tls_mode for SSL control
           clientConfig.tls_mode = this.config.sslRejectUnauthorized
-            ? "verify-full"
-            : "require";
+            ? SSL_MODES.VERIFY_FULL
+            : SSL_MODES.REQUIRE;
         }
       } else {
-        clientConfig.tls_mode = "disable";
+        clientConfig.tls_mode = SSL_MODES.DISABLE;
       }
 
       const client = new verticaTyped.Client(clientConfig);
@@ -78,7 +81,7 @@ export class VerticaService {
       this.connection = client;
 
       console.log(
-        `✅ Connected to Vertica database: ${this.config.host}:${this.config.port}/${this.config.database}`
+        `${LOG_MESSAGES.DB_CONNECTED}: ${this.config.host}:${this.config.port}/${this.config.database}`
       );
     } catch (error) {
       throw new Error(
@@ -96,10 +99,10 @@ export class VerticaService {
     if (this.connection) {
       try {
         await this.connection.end();
-        console.log("🔌 Disconnected from Vertica database");
+        console.log(LOG_MESSAGES.DB_DISCONNECTED);
       } catch (error) {
         console.warn(
-          "⚠️ Warning during disconnect:",
+          LOG_MESSAGES.DB_CONNECTION_WARNING,
           error instanceof Error ? error.message : String(error)
         );
       } finally {
@@ -227,7 +230,7 @@ export class VerticaService {
     tableName: string,
     schemaName?: string
   ): Promise<TableStructure> {
-    const schema = schemaName || this.config.defaultSchema || "public";
+    const schema = resolveSchemaName(schemaName, this.config.defaultSchema);
 
     // Get column information
     const columnsQuery = `
@@ -282,21 +285,11 @@ export class VerticaService {
 
     const tableInfo = tableResult.rows[0]!;
 
-    // Determine table type based on flags
-    let tableType = "TABLE";
-    if (tableInfo.is_temp_table === "t" || tableInfo.is_temp_table === true) {
-      tableType = "TEMPORARY TABLE";
-    } else if (
-      tableInfo.is_system_table === "t" ||
-      tableInfo.is_system_table === true
-    ) {
-      tableType = "SYSTEM TABLE";
-    } else if (
-      tableInfo.is_flextable === "t" ||
-      tableInfo.is_flextable === true
-    ) {
-      tableType = "FLEX TABLE";
-    }
+    const tableType = determineTableType({
+      is_temp_table: tableInfo.is_temp_table as string | boolean,
+      is_system_table: tableInfo.is_system_table as string | boolean,
+      is_flextable: tableInfo.is_flextable as string | boolean,
+    });
 
     // Get constraints (simplified - Vertica has different constraint system)
     const constraints: ConstraintInfo[] = [];
@@ -315,7 +308,7 @@ export class VerticaService {
    * List all tables in a schema
    */
   async listTables(schemaName?: string): Promise<TableInfo[]> {
-    const schema = schemaName || this.config.defaultSchema || "public";
+    const schema = resolveSchemaName(schemaName, this.config.defaultSchema);
 
     const query = `
       SELECT 
@@ -333,15 +326,11 @@ export class VerticaService {
     const result = await this.executeQuery(query, [schema]);
 
     return result.rows.map((row) => {
-      // Determine table type based on flags
-      let tableType = "TABLE";
-      if (row.is_temp_table === "t" || row.is_temp_table === true) {
-        tableType = "TEMPORARY TABLE";
-      } else if (row.is_system_table === "t" || row.is_system_table === true) {
-        tableType = "SYSTEM TABLE";
-      } else if (row.is_flextable === "t" || row.is_flextable === true) {
-        tableType = "FLEX TABLE";
-      }
+      const tableType = determineTableType({
+        is_temp_table: row.is_temp_table as string | boolean,
+        is_system_table: row.is_system_table as string | boolean,
+        is_flextable: row.is_flextable as string | boolean,
+      });
 
       return {
         schemaName: row.table_schema as string,
@@ -356,7 +345,7 @@ export class VerticaService {
    * List all views in a schema
    */
   async listViews(schemaName?: string): Promise<ViewInfo[]> {
-    const schema = schemaName || this.config.defaultSchema || "public";
+    const schema = resolveSchemaName(schemaName, this.config.defaultSchema);
 
     const query = `
       SELECT 
@@ -386,7 +375,7 @@ export class VerticaService {
     tableName: string,
     schemaName?: string
   ): Promise<IndexInfo[]> {
-    const schema = schemaName || this.config.defaultSchema || "public";
+    const schema = resolveSchemaName(schemaName, this.config.defaultSchema);
 
     // Note: Vertica has projections instead of traditional indexes
     // This query gets projection information which serves a similar purpose

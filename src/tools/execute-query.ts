@@ -1,14 +1,23 @@
 import { z } from "zod";
-import { MCPTool } from "mcp-framework";
-import { VerticaService } from "../services/vertica-service.js";
-import { getDatabaseConfig } from "../config/database.js";
+import { BaseTool } from "../base/base-tool.js";
+import { formatQueryResult } from "../utils/response-formatter.js";
 
 interface ExecuteQueryInput {
   sql: string;
   params?: unknown[];
 }
 
-export default class ExecuteQueryTool extends MCPTool<ExecuteQueryInput> {
+interface ExecuteQueryOutput {
+  query: string;
+  rowCount: number;
+  fields: Array<{ name: string; dataType: string }>;
+  rows: Record<string, unknown>[];
+}
+
+export default class ExecuteQueryTool extends BaseTool<
+  ExecuteQueryInput,
+  ExecuteQueryOutput
+> {
   name = "execute_query";
   description =
     "Execute a readonly SQL query against the Vertica database. Supports SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH queries.";
@@ -25,52 +34,21 @@ export default class ExecuteQueryTool extends MCPTool<ExecuteQueryInput> {
     },
   };
 
-  async execute(input: ExecuteQueryInput) {
-    try {
-      // Create Vertica service instance
-      const config = getDatabaseConfig();
-      const verticaService = new VerticaService(config);
+  protected async executeOperation(
+    input: ExecuteQueryInput
+  ): Promise<ExecuteQueryOutput> {
+    const service = await this.getService();
 
-      try {
-        // Execute the query
-        const result = await verticaService.executeQuery(
-          input.sql,
-          input.params || []
-        );
+    const result = await service.executeQuery(input.sql, input.params || []);
 
-        return JSON.stringify(
-          {
-            success: true,
-            query: input.sql,
-            rowCount: result.rowCount,
-            fields: result.fields.map((field) => ({
-              name: field.name,
-              dataType: field.format,
-            })),
-            rows: result.rows,
-            executedAt: new Date().toISOString(),
-          },
-          null,
-          2
-        );
-      } finally {
-        // Always disconnect
-        await verticaService.disconnect();
-      }
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+    const formatted = formatQueryResult({
+      ...result,
+      query: input.sql,
+    });
 
-      return JSON.stringify(
-        {
-          success: false,
-          error: errorMessage,
-          query: input.sql,
-          executedAt: new Date().toISOString(),
-        },
-        null,
-        2
-      );
-    }
+    return {
+      ...formatted,
+      query: input.sql, // Ensure query is always defined
+    };
   }
 }

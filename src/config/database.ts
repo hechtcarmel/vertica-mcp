@@ -1,7 +1,7 @@
 import { z } from "zod";
 import dotenv from "dotenv";
-import process from "node:process";
 import type { VerticaConfig } from "../types/vertica.js";
+import { DATABASE_CONSTANTS } from "../constants/index.js";
 
 // Load environment variables
 dotenv.config();
@@ -9,15 +9,30 @@ dotenv.config();
 // Zod schema for validating configuration
 const ConfigSchema = z.object({
   host: z.string().min(1, "VERTICA_HOST is required"),
-  port: z.coerce.number().int().min(1).max(65535).default(5433),
+  port: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(65535)
+    .default(DATABASE_CONSTANTS.DEFAULT_PORT),
   database: z.string().min(1, "VERTICA_DATABASE is required"),
   user: z.string().min(1, "VERTICA_USER is required"),
   password: z.string().optional(),
-  connectionLimit: z.coerce.number().int().min(1).max(100).default(10),
-  queryTimeout: z.coerce.number().int().min(1000).max(300000).default(30000),
+  connectionLimit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(DATABASE_CONSTANTS.DEFAULT_CONNECTION_LIMIT),
+  queryTimeout: z.coerce
+    .number()
+    .int()
+    .min(1000)
+    .max(300000)
+    .default(DATABASE_CONSTANTS.DEFAULT_QUERY_TIMEOUT),
   ssl: z.coerce.boolean().default(false),
   sslRejectUnauthorized: z.coerce.boolean().default(true),
-  defaultSchema: z.string().default("public"),
+  defaultSchema: z.string().default(DATABASE_CONSTANTS.DEFAULT_SCHEMA),
 });
 
 /**

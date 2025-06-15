@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { MCPServer } from "mcp-framework";
+import { LOG_MESSAGES } from "./constants/index.js";
+import process from "node:process";
 
 async function main() {
   try {
@@ -9,7 +11,7 @@ async function main() {
 
     // Set up error handling
     const gracefulShutdown = async () => {
-      console.log("\n🛑 Shutting down gracefully...");
+      console.log(LOG_MESSAGES.SERVER_SHUTDOWN);
       process.exit(0);
     };
 
@@ -17,14 +19,12 @@ async function main() {
     process.on("SIGTERM", gracefulShutdown);
 
     // Start the server
-    console.log("🚀 Starting Vertica MCP Server...");
+    console.log(LOG_MESSAGES.SERVER_STARTING);
     await server.start();
-    console.log(
-      "✅ Vertica MCP Server is running and ready to accept connections"
-    );
+    console.log(LOG_MESSAGES.SERVER_READY);
   } catch (error) {
     console.error(
-      "❌ Failed to start Vertica MCP Server:",
+      LOG_MESSAGES.SERVER_START_FAILED,
       error instanceof Error ? error.message : String(error)
     );
     process.exit(1);
@@ -33,6 +33,6 @@ async function main() {
 
 // Run the server
 main().catch((error) => {
-  console.error("❌ Unhandled error in main:", error);
+  console.error(LOG_MESSAGES.UNHANDLED_ERROR, error);
   process.exit(1);
 });

@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "type": "module",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
   },
   "scripts": {
     "build": "tsc",
@@ -13,7 +14,11 @@
     "start": "node dist/index.js",
     "clean": "rm -rf dist",
     "prebuild": "npm run clean",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test:connection": "npm run build && VERTICA_HOST=localhost npm start",
+    "format": "prettier --write 'src/**/*.{ts,js,json}'",
+    "check": "npm run typecheck && npm run build"
   },
   "keywords": [
     "mcp",
@@ -32,7 +37,8 @@
     "dotenv": "^16.3.1"
   },
   "devDependencies": {
-    "@types/node": "^18.19.3",
-    "typescript": "^5.3.3"
+    "@types/node": "^20.19.0",
+    "typescript": "^5.7.2",
+    "prettier": "^3.3.3"
   }
 }
