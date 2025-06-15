@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MCPTool } from "mcp-framework";
+import type { MCPTool } from "../types/tool.js";
 import { VerticaService } from "../services/vertica-service.js";
 import { getDatabaseConfig } from "../config/database.js";
 
@@ -8,24 +8,30 @@ interface ListIndexesInput {
   schemaName?: string;
 }
 
-class ListIndexesTool extends MCPTool<ListIndexesInput> {
+export default class ListIndexesTool implements MCPTool {
   name = "list_indexes";
   description =
     "List indexes (projections) for a specific table in Vertica with column and uniqueness information";
 
-  schema = {
-    tableName: {
-      type: z.string(),
-      description: "Name of the table to list indexes for",
+  inputSchema = {
+    type: "object" as const,
+    properties: {
+      tableName: {
+        type: "string" as const,
+        description: "Name of the table to list indexes for",
+      },
+      schemaName: {
+        type: "string" as const,
+        description:
+          "Schema name (optional, defaults to configured default schema)",
+      },
     },
-    schemaName: {
-      type: z.string().optional(),
-      description:
-        "Schema name (optional, defaults to configured default schema)",
-    },
+    required: ["tableName"],
   };
 
-  async execute(input: ListIndexesInput) {
+  async execute(input: Record<string, unknown>): Promise<string> {
+    // Validate input
+    const parsed = this.parseInput(input);
     let verticaService: VerticaService | null = null;
 
     try {
@@ -35,15 +41,15 @@ class ListIndexesTool extends MCPTool<ListIndexesInput> {
 
       // List indexes
       const indexes = await verticaService.listIndexes(
-        input.tableName,
-        input.schemaName
+        parsed.tableName,
+        parsed.schemaName
       );
 
       return JSON.stringify(
         {
           success: true,
-          table: input.tableName,
-          schema: input.schemaName ?? config.defaultSchema ?? "public",
+          table: parsed.tableName,
+          schema: parsed.schemaName ?? config.defaultSchema ?? "public",
           indexCount: indexes.length,
           indexes: indexes.map((index) => ({
             indexName: index.indexName,
@@ -66,8 +72,8 @@ class ListIndexesTool extends MCPTool<ListIndexesInput> {
         {
           success: false,
           error: errorMessage,
-          tableName: input.tableName,
-          schemaName: input.schemaName,
+          tableName: parsed.tableName,
+          schemaName: parsed.schemaName,
           queriedAt: new Date().toISOString(),
         },
         null,
@@ -83,6 +89,13 @@ class ListIndexesTool extends MCPTool<ListIndexesInput> {
       }
     }
   }
-}
 
-export default ListIndexesTool;
+  private parseInput(input: Record<string, unknown>): ListIndexesInput {
+    const schema = z.object({
+      tableName: z.string(),
+      schemaName: z.string().optional(),
+    });
+
+    return schema.parse(input);
+  }
+}

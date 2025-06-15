@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MCPTool } from "mcp-framework";
+import type { MCPTool } from "../types/tool.js";
 import { VerticaService } from "../services/vertica-service.js";
 import { getDatabaseConfig } from "../config/database.js";
 import { formatTableStructure } from "../utils/response-formatter.js";
@@ -13,31 +13,37 @@ interface GetTableStructureInput {
   schemaName?: string;
 }
 
-class GetTableStructureTool extends MCPTool<GetTableStructureInput> {
+export default class GetTableStructureTool implements MCPTool {
   name = "get_table_structure";
   description =
     "Get detailed structure information for a specific table including columns, data types, constraints, and metadata.";
 
-  schema = {
-    tableName: {
-      type: z.string(),
-      description: "Name of the table to analyze.",
+  inputSchema = {
+    type: "object" as const,
+    properties: {
+      tableName: {
+        type: "string" as const,
+        description: "Name of the table to analyze.",
+      },
+      schemaName: {
+        type: "string" as const,
+        description:
+          "Schema name (optional, defaults to configured default schema).",
+      },
     },
-    schemaName: {
-      type: z.string().optional(),
-      description:
-        "Schema name (optional, defaults to configured default schema).",
-    },
+    required: ["tableName"],
   };
 
-  async execute(input: GetTableStructureInput) {
+  async execute(input: Record<string, unknown>): Promise<string> {
+    // Validate input
+    const parsed = this.parseInput(input);
     let service: VerticaService | null = null;
 
     try {
       // Validate inputs
-      validateTableName(input.tableName);
-      if (input.schemaName) {
-        validateSchemaName(input.schemaName);
+      validateTableName(parsed.tableName);
+      if (parsed.schemaName) {
+        validateSchemaName(parsed.schemaName);
       }
 
       const config = getDatabaseConfig();
@@ -45,8 +51,8 @@ class GetTableStructureTool extends MCPTool<GetTableStructureInput> {
 
       // Get table structure
       const structure = await service.getTableStructure(
-        input.tableName,
-        input.schemaName
+        parsed.tableName,
+        parsed.schemaName
       );
 
       const formatted = formatTableStructure(structure);
@@ -68,8 +74,8 @@ class GetTableStructureTool extends MCPTool<GetTableStructureInput> {
         {
           success: false,
           error: errorMessage,
-          tableName: input.tableName,
-          schemaName: input.schemaName,
+          tableName: parsed.tableName,
+          schemaName: parsed.schemaName,
           queriedAt: new Date().toISOString(),
         },
         null,
@@ -85,6 +91,13 @@ class GetTableStructureTool extends MCPTool<GetTableStructureInput> {
       }
     }
   }
-}
 
-export default GetTableStructureTool;
+  private parseInput(input: Record<string, unknown>): GetTableStructureInput {
+    const schema = z.object({
+      tableName: z.string(),
+      schemaName: z.string().optional(),
+    });
+
+    return schema.parse(input);
+  }
+}

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MCPTool } from "mcp-framework";
+import type { MCPTool } from "../types/tool.js";
 import { VerticaService } from "../services/vertica-service.js";
 import { getDatabaseConfig } from "../config/database.js";
 
@@ -7,20 +7,26 @@ interface ListViewsInput {
   schemaName?: string;
 }
 
-class ListViewsTool extends MCPTool<ListViewsInput> {
+export default class ListViewsTool implements MCPTool {
   name = "list_views";
   description =
     "List all views in a schema with their definitions and metadata";
 
-  schema = {
-    schemaName: {
-      type: z.string().optional(),
-      description:
-        "Schema name (optional, defaults to configured default schema)",
+  inputSchema = {
+    type: "object" as const,
+    properties: {
+      schemaName: {
+        type: "string" as const,
+        description:
+          "Schema name (optional, defaults to configured default schema)",
+      },
     },
+    required: [],
   };
 
-  async execute(input: ListViewsInput) {
+  async execute(input: Record<string, unknown>): Promise<string> {
+    // Validate input
+    const parsed = this.parseInput(input);
     let verticaService: VerticaService | null = null;
 
     try {
@@ -29,12 +35,12 @@ class ListViewsTool extends MCPTool<ListViewsInput> {
       verticaService = new VerticaService(config);
 
       // List views
-      const views = await verticaService.listViews(input.schemaName);
+      const views = await verticaService.listViews(parsed.schemaName);
 
       return JSON.stringify(
         {
           success: true,
-          schema: input.schemaName || config.defaultSchema || "public",
+          schema: parsed.schemaName || config.defaultSchema || "public",
           viewCount: views.length,
           views: views.map((view) => ({
             schemaName: view.schemaName,
@@ -58,7 +64,7 @@ class ListViewsTool extends MCPTool<ListViewsInput> {
         {
           success: false,
           error: errorMessage,
-          schemaName: input.schemaName,
+          schemaName: parsed.schemaName,
           queriedAt: new Date().toISOString(),
         },
         null,
@@ -74,6 +80,12 @@ class ListViewsTool extends MCPTool<ListViewsInput> {
       }
     }
   }
-}
 
-export default ListViewsTool;
+  private parseInput(input: Record<string, unknown>): ListViewsInput {
+    const schema = z.object({
+      schemaName: z.string().optional(),
+    });
+
+    return schema.parse(input);
+  }
+}

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MCPTool } from "mcp-framework";
+import type { MCPTool } from "../types/tool.js";
 import { VerticaService } from "../services/vertica-service.js";
 import { getDatabaseConfig } from "../config/database.js";
 
@@ -9,28 +9,39 @@ interface StreamQueryInput {
   maxRows?: number;
 }
 
-class StreamQueryTool extends MCPTool<StreamQueryInput> {
+export default class StreamQueryTool implements MCPTool {
   name = "stream_query";
   description =
     "Stream large query results in batches to handle datasets efficiently without memory issues.";
 
-  schema = {
-    sql: {
-      type: z.string(),
-      description:
-        "SQL query to execute. Must be a readonly query (SELECT, SHOW, DESCRIBE, EXPLAIN, or WITH).",
+  inputSchema = {
+    type: "object" as const,
+    properties: {
+      sql: {
+        type: "string" as const,
+        description:
+          "SQL query to execute. Must be a readonly query (SELECT, SHOW, DESCRIBE, EXPLAIN, or WITH).",
+      },
+      batchSize: {
+        type: "number" as const,
+        minimum: 1,
+        maximum: 10000,
+        default: 1000,
+        description: "Number of rows per batch (1-10000, default: 1000).",
+      },
+      maxRows: {
+        type: "number" as const,
+        minimum: 1,
+        maximum: 1000000,
+        description: "Maximum total rows to fetch (optional).",
+      },
     },
-    batchSize: {
-      type: z.number().int().min(1).max(10000).default(1000),
-      description: "Number of rows per batch (1-10000, default: 1000).",
-    },
-    maxRows: {
-      type: z.number().int().min(1).max(1000000).optional(),
-      description: "Maximum total rows to fetch (optional).",
-    },
+    required: ["sql"],
   };
 
-  async execute(input: StreamQueryInput) {
+  async execute(input: Record<string, unknown>): Promise<string> {
+    // Validate input
+    const parsed = this.parseInput(input);
     let verticaService: VerticaService | null = null;
 
     try {
@@ -40,12 +51,12 @@ class StreamQueryTool extends MCPTool<StreamQueryInput> {
 
       const batches = [];
       let totalRows = 0;
-      const batchSize = input.batchSize || 1000;
+      const batchSize = parsed.batchSize || 1000;
 
       // Stream the query results
-      for await (const batch of verticaService.streamQuery(input.sql, {
+      for await (const batch of verticaService.streamQuery(parsed.sql, {
         batchSize,
-        maxRows: input.maxRows,
+        maxRows: parsed.maxRows,
       })) {
         batches.push({
           batchNumber: batch.batchNumber,
@@ -69,7 +80,7 @@ class StreamQueryTool extends MCPTool<StreamQueryInput> {
       return JSON.stringify(
         {
           success: true,
-          query: input.sql,
+          query: parsed.sql,
           totalRows,
           batchCount: batches.length,
           batchSize,
@@ -87,7 +98,7 @@ class StreamQueryTool extends MCPTool<StreamQueryInput> {
         {
           success: false,
           error: errorMessage,
-          query: input.sql,
+          query: parsed.sql,
           executedAt: new Date().toISOString(),
         },
         null,
@@ -103,6 +114,14 @@ class StreamQueryTool extends MCPTool<StreamQueryInput> {
       }
     }
   }
-}
 
-export default StreamQueryTool;
+  private parseInput(input: Record<string, unknown>): StreamQueryInput {
+    const schema = z.object({
+      sql: z.string(),
+      batchSize: z.number().int().min(1).max(10000).default(1000),
+      maxRows: z.number().int().min(1).max(1000000).optional(),
+    });
+
+    return schema.parse(input);
+  }
+}

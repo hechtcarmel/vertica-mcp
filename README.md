@@ -2,8 +2,6 @@
 
 A Model Context Protocol (MCP) server for readonly communication with Vertica databases. This server enables AI assistants like Claude to interact with Vertica databases safely through a comprehensive set of readonly operations.
 
-> **Latest Update (v1.0.9)**: Fixed MCP framework compatibility issues. The server now works correctly with `npx` and properly loads all tools when used with Claude Desktop, Cursor, and other MCP clients.
-
 ## Features
 
 - 🔒 **Readonly Operations Only** - Ensures database safety with SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH queries only
@@ -13,7 +11,7 @@ A Model Context Protocol (MCP) server for readonly communication with Vertica da
 - 🌊 **Streaming Support** - Handle large result sets efficiently with batch streaming
 - ⚡ **High Performance** - Connection pooling and query optimization for Vertica
 - 🛡️ **Type Safety** - Full TypeScript implementation with comprehensive error handling
-- 📋 **MCP Standard Compliance** - Built with mcp-framework following MCP best practices
+- 📋 **MCP Standard Compliance** - Built with official `@modelcontextprotocol/sdk` following MCP best practices
 
 ## Prerequisites
 
@@ -325,11 +323,11 @@ vertica-mcp/
 
 This project follows modern TypeScript best practices and clean architecture principles:
 
-#### **MCP Framework Integration**
-- All tools extend `MCPTool<InputType>` from mcp-framework for proper compatibility
-- Uses standard MCP schema format with `type` and `description` properties
-- Implements proper tool discovery and registration patterns
-- Full compatibility with npx execution and MCP clients
+#### **Official MCP SDK Integration**
+- All tools implement the `MCPTool` interface using the official `@modelcontextprotocol/sdk`
+- Uses standard JSON Schema format for tool input validation
+- Implements proper MCP protocol message handling and tool registration
+- Full compatibility with npx execution and all MCP clients including Claude Desktop
 
 #### **Utility Modules**
 - `response-formatter.ts`: Standardized API response formatting
@@ -343,11 +341,11 @@ This project follows modern TypeScript best practices and clean architecture pri
 - Graceful service cleanup in finally blocks
 
 #### **Code Quality Features**
-- **MCP Compliance**: Full adherence to MCP framework patterns and best practices
-- **Type Safety**: Comprehensive TypeScript types with proper input validation
-- **Separation of Concerns**: Clear separation between business logic, utilities, and infrastructure
-- **Input Validation**: Centralized validation for SQL identifiers and parameters
-- **Resource Management**: Automatic cleanup of database connections
+- **MCP Compliance**: Full adherence to official MCP SDK patterns and protocol specification
+- **Type Safety**: Comprehensive TypeScript types with Zod schema validation
+- **Separation of Concerns**: Clean architecture with tools, services, utilities, and configuration layers
+- **Input Validation**: Robust validation using Zod schemas for all tool inputs
+- **Resource Management**: Automatic cleanup of database connections and proper error handling
 
 ### Building
 
@@ -488,7 +486,15 @@ When contributing to this project, please follow these guidelines:
 
 ## Changelog
 
-### v1.0.9 (Latest)
+### v1.1.0 (Latest)
+- **🚀 Major**: Migrated to official MCP SDK (`@modelcontextprotocol/sdk`) for improved compatibility
+- **🔧 Enhanced**: All tools now use proper JSON Schema validation with Zod
+- **📦 Improved**: Better error handling and type safety throughout the codebase
+- **🏗️ Architecture**: Maintained clean separation of concerns while adopting official SDK patterns
+- **⚡ Performance**: Improved protocol compliance and message handling
+- **🔒 Future-proof**: Now uses the official SDK ensuring long-term compatibility and support
+
+### v1.0.9
 - **🔧 Fixed**: MCP framework compatibility issues that prevented tools from loading
 - **🔧 Fixed**: NPX execution now works correctly with all MCP clients
 - **🔧 Fixed**: Tool discovery and registration following proper mcp-framework patterns

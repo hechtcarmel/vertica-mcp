@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MCPTool } from "mcp-framework";
+import type { MCPTool } from "../types/tool.js";
 import { VerticaService } from "../services/vertica-service.js";
 import { getDatabaseConfig } from "../config/database.js";
 
@@ -7,19 +7,25 @@ interface ListTablesInput {
   schemaName?: string;
 }
 
-class ListTablesTool extends MCPTool<ListTablesInput> {
+export default class ListTablesTool implements MCPTool {
   name = "list_tables";
   description = "List all tables in a schema with metadata";
 
-  schema = {
-    schemaName: {
-      type: z.string().optional(),
-      description:
-        "Schema name (optional, defaults to configured default schema)",
+  inputSchema = {
+    type: "object" as const,
+    properties: {
+      schemaName: {
+        type: "string" as const,
+        description:
+          "Schema name (optional, defaults to configured default schema)",
+      },
     },
+    required: [],
   };
 
-  async execute(input: ListTablesInput) {
+  async execute(input: Record<string, unknown>): Promise<string> {
+    // Validate input
+    const parsed = this.parseInput(input);
     let verticaService: VerticaService | null = null;
 
     try {
@@ -28,12 +34,12 @@ class ListTablesTool extends MCPTool<ListTablesInput> {
       verticaService = new VerticaService(config);
 
       // List tables
-      const tables = await verticaService.listTables(input.schemaName);
+      const tables = await verticaService.listTables(parsed.schemaName);
 
       return JSON.stringify(
         {
           success: true,
-          schema: input.schemaName || config.defaultSchema || "public",
+          schema: parsed.schemaName || config.defaultSchema || "public",
           tableCount: tables.length,
           tables: tables.map((table) => ({
             schemaName: table.schemaName,
@@ -55,7 +61,7 @@ class ListTablesTool extends MCPTool<ListTablesInput> {
         {
           success: false,
           error: errorMessage,
-          schemaName: input.schemaName,
+          schemaName: parsed.schemaName,
           queriedAt: new Date().toISOString(),
         },
         null,
@@ -71,6 +77,12 @@ class ListTablesTool extends MCPTool<ListTablesInput> {
       }
     }
   }
-}
 
-export default ListTablesTool;
+  private parseInput(input: Record<string, unknown>): ListTablesInput {
+    const schema = z.object({
+      schemaName: z.string().optional(),
+    });
+
+    return schema.parse(input);
+  }
+}
