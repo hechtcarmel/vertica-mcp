@@ -1,5 +1,5 @@
 {
-  "name": "vertica-mcp",
+  "name": "@your-username/vertica-mcp",
   "version": "1.0.0",
   "description": "MCP (Model Context Protocol) server for readonly Vertica database operations",
   "main": "dist/index.js",
@@ -39,16 +39,16 @@
     "readonly",
     "sql"
   ],
-  "author": "Your Name <your.email@example.com>",
+  "author": "hechtcarmel@gmail.com",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/vertica-mcp.git"
+    "url": "git+https://github.com/hechtcarmel/vertica-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/vertica-mcp/issues"
+    "url": "https://github.com/hechtcarmel/vertica-mcp/issues"
   },
-  "homepage": "https://github.com/yourusername/vertica-mcp#readme",
+  "homepage": "https://github.com/hechtcarmel/vertica-mcp#readme",
   "dependencies": {
     "mcp-framework": "^0.2.13",
     "vertica-nodejs": "^1.1.4",
