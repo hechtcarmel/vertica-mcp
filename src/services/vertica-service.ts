@@ -1,5 +1,18 @@
-import * as vertica from "vertica-nodejs";
+import vertica from "vertica-nodejs";
 type Connection = any;
+
+// Type declaration for vertica-nodejs CommonJS module
+interface VerticaModule {
+  Client: new (config: any) => any;
+  Pool: any;
+  defaults: any;
+  types: any;
+  DatabaseError: any;
+  version: string;
+}
+
+const verticaTyped = vertica as any as VerticaModule;
+
 import type {
   VerticaConfig,
   QueryResult,
@@ -37,19 +50,36 @@ export class VerticaService {
     }
 
     try {
-      const { Client } = vertica as any;
-      const client = new Client({
+      const clientConfig: any = {
         host: this.config.host,
         port: this.config.port,
         database: this.config.database,
         user: this.config.user,
         password: this.config.password,
-        ssl: this.config.ssl,
-        connectionTimeoutMillis: this.config.queryTimeout,
-      });
+        connectionTimeoutMillis: this.config.queryTimeout || 30000,
+      };
+
+      // Add SSL/TLS configuration if specified
+      if (this.config.ssl) {
+        clientConfig.tls_mode = "require";
+        if (this.config.sslRejectUnauthorized !== undefined) {
+          // Note: Vertica uses tls_mode for SSL control
+          clientConfig.tls_mode = this.config.sslRejectUnauthorized
+            ? "verify-full"
+            : "require";
+        }
+      } else {
+        clientConfig.tls_mode = "disable";
+      }
+
+      const client = new verticaTyped.Client(clientConfig);
 
       await client.connect();
       this.connection = client;
+
+      console.log(
+        `✅ Connected to Vertica database: ${this.config.host}:${this.config.port}/${this.config.database}`
+      );
     } catch (error) {
       throw new Error(
         `Failed to connect to Vertica: ${
@@ -64,9 +94,25 @@ export class VerticaService {
    */
   async disconnect(): Promise<void> {
     if (this.connection) {
-      await this.connection.end();
-      this.connection = null;
+      try {
+        await this.connection.end();
+        console.log("🔌 Disconnected from Vertica database");
+      } catch (error) {
+        console.warn(
+          "⚠️ Warning during disconnect:",
+          error instanceof Error ? error.message : String(error)
+        );
+      } finally {
+        this.connection = null;
+      }
     }
+  }
+
+  /**
+   * Check if connected to database
+   */
+  isConnected(): boolean {
+    return this.connection !== null;
   }
 
   /**
@@ -216,7 +262,11 @@ export class VerticaService {
 
     // Get table metadata
     const tableQuery = `
-      SELECT table_type, owner_name 
+      SELECT 
+        owner_name,
+        is_temp_table,
+        is_system_table,
+        is_flextable
       FROM v_catalog.tables 
       WHERE table_schema = ? AND table_name = ?
     `;
@@ -232,6 +282,22 @@ export class VerticaService {
 
     const tableInfo = tableResult.rows[0]!;
 
+    // Determine table type based on flags
+    let tableType = "TABLE";
+    if (tableInfo.is_temp_table === "t" || tableInfo.is_temp_table === true) {
+      tableType = "TEMPORARY TABLE";
+    } else if (
+      tableInfo.is_system_table === "t" ||
+      tableInfo.is_system_table === true
+    ) {
+      tableType = "SYSTEM TABLE";
+    } else if (
+      tableInfo.is_flextable === "t" ||
+      tableInfo.is_flextable === true
+    ) {
+      tableType = "FLEX TABLE";
+    }
+
     // Get constraints (simplified - Vertica has different constraint system)
     const constraints: ConstraintInfo[] = [];
 
@@ -240,7 +306,7 @@ export class VerticaService {
       tableName,
       columns,
       constraints,
-      tableType: tableInfo.table_type as string,
+      tableType,
       owner: tableInfo.owner_name as string,
     };
   }
@@ -255,8 +321,10 @@ export class VerticaService {
       SELECT 
         table_schema,
         table_name,
-        table_type,
-        owner_name
+        owner_name,
+        is_temp_table,
+        is_system_table,
+        is_flextable
       FROM v_catalog.tables 
       WHERE table_schema = ?
       ORDER BY table_name
@@ -264,12 +332,24 @@ export class VerticaService {
 
     const result = await this.executeQuery(query, [schema]);
 
-    return result.rows.map((row) => ({
-      schemaName: row.table_schema as string,
-      tableName: row.table_name as string,
-      tableType: row.table_type as string,
-      owner: row.owner_name as string,
-    }));
+    return result.rows.map((row) => {
+      // Determine table type based on flags
+      let tableType = "TABLE";
+      if (row.is_temp_table === "t" || row.is_temp_table === true) {
+        tableType = "TEMPORARY TABLE";
+      } else if (row.is_system_table === "t" || row.is_system_table === true) {
+        tableType = "SYSTEM TABLE";
+      } else if (row.is_flextable === "t" || row.is_flextable === true) {
+        tableType = "FLEX TABLE";
+      }
+
+      return {
+        schemaName: row.table_schema as string,
+        tableName: row.table_name as string,
+        tableType,
+        owner: row.owner_name as string,
+      };
+    });
   }
 
   /**

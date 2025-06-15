@@ -40,6 +40,8 @@ pnpm install
 pnpm run build
 ```
 
+
+
 ### Environment Configuration
 
 Create a `.env` file in the project root with your Vertica connection details:
@@ -276,7 +278,23 @@ VERTICA_HOST=testhost pnpm start
 
 ## Troubleshooting
 
-### Connection Issues
+### Common Issues
+
+#### "Client is not a constructor" Error
+
+**Problem:** Getting error `"Failed to connect to Vertica: Client is not a constructor"`
+
+**Solution:** This was a known issue with the Vertica Node.js client import. It has been fixed in this version. If you still encounter this error:
+
+1. Ensure you're using the latest version of this MCP server
+2. Verify your Node.js version is 18.x or higher
+3. Try rebuilding the project:
+   ```bash
+   pnpm run clean
+   pnpm run build
+   ```
+
+#### Connection Issues
 
 1. **Verify database connectivity:**
    ```bash
@@ -284,12 +302,18 @@ VERTICA_HOST=testhost pnpm start
    vsql -h localhost -p 5433 -d VMart -U dbadmin
    ```
 
-2. **Check environment variables:**
+2. **Verify MCP server builds correctly:**
+   ```bash
+   pnpm run build
+   pnpm start
+   ```
+
+3. **Check environment variables:**
    - Ensure all required variables are set
    - Verify credentials are correct
    - Check network connectivity to Vertica host
 
-3. **SSL Configuration:**
+4. **SSL Configuration:**
    - If using SSL, ensure certificates are properly configured
    - Try disabling SSL for testing: `VERTICA_SSL=false`
 
