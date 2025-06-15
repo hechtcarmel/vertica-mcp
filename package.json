@@ -4,6 +4,14 @@
   "description": "MCP (Model Context Protocol) server for readonly Vertica database operations",
   "main": "dist/index.js",
   "type": "module",
+  "bin": {
+    "vertica-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=18.0.0",
     "pnpm": ">=8.0.0"
@@ -18,7 +26,8 @@
     "lint": "tsc --noEmit",
     "test:connection": "npm run build && VERTICA_HOST=localhost npm start",
     "format": "prettier --write 'src/**/*.{ts,js,json}'",
-    "check": "npm run typecheck && npm run build"
+    "check": "npm run typecheck && npm run build",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "mcp",
@@ -26,10 +35,20 @@
     "database", 
     "model-context-protocol",
     "claude",
-    "ai"
+    "ai",
+    "readonly",
+    "sql"
   ],
-  "author": "",
+  "author": "Your Name <your.email@example.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/vertica-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/vertica-mcp/issues"
+  },
+  "homepage": "https://github.com/yourusername/vertica-mcp#readme",
   "dependencies": {
     "mcp-framework": "^0.2.13",
     "vertica-nodejs": "^1.1.4",
