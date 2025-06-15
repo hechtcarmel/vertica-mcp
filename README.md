@@ -1,6 +1,6 @@
 # Vertica MCP Server
 
-A Model Context Protocol (MCP) server for readonly communication with Vertica databases. This server enables AI assistants like Claude to interact with Vertica databases safely through a comprehensive set of readonly operations.
+A Model Context Protocol (MCP) server for readonly communication with Vertica databases. This server enables AI assistants like Claude and Cursor to interact with Vertica databases safely through a comprehensive set of readonly operations.
 
 ## Features
 
@@ -9,99 +9,60 @@ A Model Context Protocol (MCP) server for readonly communication with Vertica da
 - 🔍 **Table Structure Analysis** - Get detailed column information, data types, and constraints
 - 📊 **Query Execution** - Execute custom SQL queries with parameter support
 - 🌊 **Streaming Support** - Handle large result sets efficiently with batch streaming
-- ⚡ **High Performance** - Connection pooling and query optimization for Vertica
+- ⚡ **High Performance** - Optimized connection handling and query execution for Vertica
 - 🛡️ **Type Safety** - Full TypeScript implementation with comprehensive error handling
 - 📋 **MCP Standard Compliance** - Built with official `@modelcontextprotocol/sdk` following MCP best practices
 
 ## Prerequisites
 
 - Node.js 18.x or higher
-- pnpm package manager
 - Access to a Vertica database
 - Environment variables for database connection
 
-## Installation
+## Installation & Usage
 
-### From npm (Recommended)
+### Quick Start with Cursor (Recommended)
 
-The easiest way to use this MCP server is via npm:
+The easiest way to use this MCP server with Cursor is to configure it in your MCP settings:
 
-```bash
-# Run directly with npx (no installation required)
-npx @hechtcarmel/vertica-mcp
-
-# Run with custom environment file
-npx @hechtcarmel/vertica-mcp --env-file /path/to/your/.env
-
-# Or install globally
-npm install -g @hechtcarmel/vertica-mcp
-vertica-mcp --env-file /path/to/your/.env
-```
-
-### From Source
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd vertica-mcp
-```
-
-2. Install dependencies:
-```bash
-pnpm install
-```
-
-3. Build the project:
-```bash
-pnpm run build
-```
-
-
-
-### Environment Configuration
-
-Create a `.env` file in the project root with your Vertica connection details:
-
+1. **Create an environment file** (e.g., `~/.cursor/vertica.env`):
 ```env
 # Required: Vertica Database Connection
-VERTICA_HOST=localhost
+VERTICA_HOST=your-vertica-host.com
 VERTICA_PORT=5433
-VERTICA_DATABASE=VMart
-VERTICA_USER=dbadmin
+VERTICA_DATABASE=your_database
+VERTICA_USER=your_username
 VERTICA_PASSWORD=your_password
 
-# Optional: Connection Pool Settings
+# Optional: Default Schema
+VERTICA_DEFAULT_SCHEMA=public
+
+# Optional: Connection Settings
 VERTICA_CONNECTION_LIMIT=10
-VERTICA_QUERY_TIMEOUT=30000
+VERTICA_QUERY_TIMEOUT=60000
 
 # Optional: SSL Settings
 VERTICA_SSL=false
 VERTICA_SSL_REJECT_UNAUTHORIZED=true
-
-# Optional: Default Schema
-VERTICA_DEFAULT_SCHEMA=public
 ```
 
-## Usage
-
-### Running the Server
-
-```bash
-# Start the MCP server (uses .env in current directory)
-pnpm start
-
-# Start with custom environment file
-node dist/index.js --env-file /path/to/custom.env
-
-# Or for development with auto-rebuild
-pnpm run dev
-
-# Show help and available options
-npx @hechtcarmel/vertica-mcp --help
-
-# Show version
-npx @hechtcarmel/vertica-mcp --version
+2. **Configure Cursor MCP** (`~/.cursor/mcp.json`):
+```json
+{
+  "mcpServers": {
+    "vertica-mcp": {
+      "command": "npx",
+      "args": [
+        "@hechtcarmel/vertica-mcp@1.2.2",
+        "--env-file",
+        "/Users/yourusername/.cursor/vertica.env"
+      ]
+    }
+  }
+}
 ```
+
+3. **Restart Cursor** and start querying your Vertica database!
 
 ### Claude Desktop Configuration
 
@@ -110,32 +71,41 @@ Add the following to your Claude Desktop configuration file:
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
 
-#### Option 1: Using npx with custom .env file (Recommended)
 ```json
 {
   "mcpServers": {
     "vertica-mcp": {
       "command": "npx",
-      "args": ["@hechtcarmel/vertica-mcp", "--env-file", "/absolute/path/to/your/.env"]
+      "args": [
+        "@hechtcarmel/vertica-mcp@1.2.2",
+        "--env-file",
+        "/path/to/your/vertica.env"
+      ]
     }
   }
 }
 ```
 
-#### Option 2: Using npx with .env file in working directory
-```json
-{
-  "mcpServers": {
-    "vertica-mcp": {
-      "command": "npx",
-      "args": ["@hechtcarmel/vertica-mcp"],
-      "cwd": "/path/to/your/env/file/directory"
-    }
-  }
-}
+### Direct Usage
+
+```bash
+# Run with custom environment file
+npx @hechtcarmel/vertica-mcp@1.2.2 --env-file /path/to/your/.env
+
+# Run with environment variables in current directory (.env file)
+npx @hechtcarmel/vertica-mcp@1.2.2
+
+# Show help
+npx @hechtcarmel/vertica-mcp@1.2.2 --help
+
+# Show version
+npx @hechtcarmel/vertica-mcp@1.2.2 --version
 ```
 
-Then create a `.env` file in the specified directory:
+## Environment Configuration
+
+Create a `.env` file with your Vertica connection details:
+
 ```env
 # Required: Vertica Database Connection
 VERTICA_HOST=localhost
@@ -146,7 +116,7 @@ VERTICA_PASSWORD=your_password
 
 # Optional: Connection Pool Settings
 VERTICA_CONNECTION_LIMIT=10
-VERTICA_QUERY_TIMEOUT=30000
+VERTICA_QUERY_TIMEOUT=60000
 
 # Optional: SSL Settings
 VERTICA_SSL=false
@@ -155,81 +125,6 @@ VERTICA_SSL_REJECT_UNAUTHORIZED=true
 # Optional: Default Schema
 VERTICA_DEFAULT_SCHEMA=public
 ```
-
-#### Option 3: Using npx with inline environment variables
-```json
-{
-  "mcpServers": {
-    "vertica-mcp": {
-      "command": "npx",
-      "args": ["@hechtcarmel/vertica-mcp"],
-      "env": {
-        "VERTICA_HOST": "localhost",
-        "VERTICA_PORT": "5433",
-        "VERTICA_DATABASE": "VMart",
-        "VERTICA_USER": "dbadmin",
-        "VERTICA_PASSWORD": "your_password"
-      }
-    }
-  }
-}
-```
-
-#### Option 4: From source (development)
-```json
-{
-  "mcpServers": {
-    "vertica-mcp": {
-      "command": "node",
-      "args": ["/absolute/path/to/vertica-mcp/dist/index.js", "--env-file", "/path/to/.env"],
-      "env": {
-        "VERTICA_HOST": "localhost",
-        "VERTICA_PORT": "5433",
-        "VERTICA_DATABASE": "VMart",
-        "VERTICA_USER": "dbadmin",
-        "VERTICA_PASSWORD": "your_password"
-      }
-    }
-  }
-}
-```
-
-### Using with Cursor
-
-#### Option 1: Using npx with custom .env file (Recommended)
-1. Create a `.env` file anywhere on your system (e.g., `~/.config/vertica/production.env`)
-2. Add your Vertica connection details to the `.env` file
-3. In Cursor settings, add a new MCP server:
-   - **Name**: `vertica-mcp`
-   - **Command**: `npx`
-   - **Arguments**: `["@hechtcarmel/vertica-mcp", "--env-file", "/absolute/path/to/your/.env"]`
-
-#### Option 1b: Using npx with .env file in working directory
-1. Create a `.env` file in a directory (e.g., `~/.cursor/vertica.env`)
-2. Add your Vertica connection details to the `.env` file
-3. In Cursor settings, add a new MCP server:
-   - **Name**: `vertica-mcp`
-   - **Command**: `npx`
-   - **Arguments**: `["@hechtcarmel/vertica-mcp"]`
-   - **Working Directory**: Path to directory containing your `.env` file
-
-#### Option 2: Using npx with inline environment variables
-1. Open Cursor settings
-2. Navigate to Features → MCP Servers  
-3. Add a new server with:
-   - **Name**: `vertica-mcp`
-   - **Command**: `npx`
-   - **Arguments**: `["@hechtcarmel/vertica-mcp"]`
-   - **Environment variables**: Add your database connection details
-
-#### Option 3: From source (development)
-1. Open Cursor settings
-2. Navigate to Features → MCP Servers
-3. Add a new server with:
-   - **Name**: `vertica-mcp`
-   - **Command**: `node`
-   - **Arguments**: `["/path/to/vertica-mcp/dist/index.js", "--env-file", "/path/to/.env"]`
-   - **Environment variables**: Add your database connection details (optional if using --env-file)
 
 ## Available Tools
 
@@ -256,7 +151,7 @@ Stream large query results in manageable batches.
 **Parameters:**
 - `sql` (string, required): SQL query to execute
 - `batchSize` (number, optional): Rows per batch (default: 1000, max: 10000)
-- `maxRows` (number, optional): Maximum total rows to fetch
+- `maxRows` (number, optional): Maximum total rows to fetch (max: 1000000)
 
 **Example:**
 ```sql
@@ -270,14 +165,6 @@ Get detailed structure information for a specific table.
 **Parameters:**
 - `tableName` (string, required): Name of the table to analyze
 - `schemaName` (string, optional): Schema name (defaults to configured schema)
-
-**Example:**
-```json
-{
-  "tableName": "customer_dimension",
-  "schemaName": "public"
-}
-```
 
 ### 4. list_tables
 
@@ -319,7 +206,7 @@ The server leverages Vertica's system catalogs (`v_catalog.*`) for metadata disc
 
 ### Query Optimization
 
-- Uses connection pooling for efficient resource management
+- Efficient connection handling with proper cleanup
 - Implements query timeouts to prevent long-running operations
 - Supports batch processing for large result sets
 - Leverages Vertica's columnar storage advantages
@@ -345,7 +232,6 @@ The server enforces readonly operations by validating that all queries start wit
 ### Connection Security
 
 - Supports SSL/TLS connections to Vertica
-- Connection pooling with configurable limits
 - Automatic connection cleanup and timeout handling
 - Password masking in logs for security
 
@@ -356,7 +242,6 @@ The server enforces readonly operations by validating that all queries start wit
 ```
 vertica-mcp/
 ├── src/
-│   ├── base/            # Base classes and abstractions
 │   ├── config/          # Configuration management
 │   ├── constants/       # Application constants
 │   ├── services/        # Database service layer
@@ -378,7 +263,7 @@ This project follows modern TypeScript best practices and clean architecture pri
 - All tools implement the `MCPTool` interface using the official `@modelcontextprotocol/sdk`
 - Uses standard JSON Schema format for tool input validation
 - Implements proper MCP protocol message handling and tool registration
-- Full compatibility with npx execution and all MCP clients including Claude Desktop
+- Full compatibility with npx execution and all MCP clients
 
 #### **Utility Modules**
 - `response-formatter.ts`: Standardized API response formatting
@@ -391,75 +276,35 @@ This project follows modern TypeScript best practices and clean architecture pri
 - Proper TypeScript error typing
 - Graceful service cleanup in finally blocks
 
-#### **Code Quality Features**
-- **MCP Compliance**: Full adherence to official MCP SDK patterns and protocol specification
-- **Type Safety**: Comprehensive TypeScript types with Zod schema validation
-- **Separation of Concerns**: Clean architecture with tools, services, utilities, and configuration layers
-- **Input Validation**: Robust validation using Zod schemas for all tool inputs
-- **Resource Management**: Automatic cleanup of database connections and proper error handling
-
-### Building
+### Building from Source
 
 ```bash
-# Clean and build
-pnpm run clean
-pnpm run build
+# Clone the repository
+git clone https://github.com/hechtcarmel/vertica-mcp.git
+cd vertica-mcp
 
-# Type checking only
-pnpm run typecheck
+# Install dependencies
+npm install
+
+# Build the project
+npm run build
+
+# Start the server
+npm start
 
 # Development with watch mode
-pnpm run dev
+npm run dev
 
-# Check code quality (typecheck + build)
-pnpm run check
+# Type checking only
+npm run typecheck
 
 # Test connection with local settings
-pnpm run test:connection
-```
-
-### Testing
-
-Test the server locally:
-
-```bash
-# Build and start
-pnpm run build
-pnpm start
-
-# Test with environment variables
-VERTICA_HOST=testhost pnpm start
+npm run test:connection
 ```
 
 ## Troubleshooting
 
 ### Common Issues
-
-```bash
-# Update to latest version
-npx @hechtcarmel/vertica-mcp@latest
-
-# Or check your current version
-npx @hechtcarmel/vertica-mcp --version
-```
-
-If you're still having issues:
-1. Clear npm cache: `npm cache clean --force`
-2. Try running with explicit version: `npx @hechtcarmel/vertica-mcp@1.0.9`
-
-#### "Client is not a constructor" Error
-
-**Problem:** Getting error `"Failed to connect to Vertica: Client is not a constructor"`
-
-**Solution:** This was a known issue with the Vertica Node.js client import. It has been fixed in this version. If you still encounter this error:
-
-1. Ensure you're using the latest version of this MCP server
-2. Verify your Node.js version is 18.x or higher
-3. Try rebuilding the project:
-   ```bash
-   pnpm run clean
-   pnpm run build
-   ```
 
 #### Connection Issues
 
@@ -469,56 +314,49 @@ If you're still having issues:
    vsql -h localhost -p 5433 -d VMart -U dbadmin
    ```
 
-2. **Verify MCP server builds correctly:**
-   ```bash
-   pnpm run build
-   pnpm start
-   ```
-
-3. **Check environment variables:**
+2. **Check environment variables:**
    - Ensure all required variables are set
    - Verify credentials are correct
    - Check network connectivity to Vertica host
 
-4. **SSL Configuration:**
+3. **SSL Configuration:**
    - If using SSL, ensure certificates are properly configured
    - Try disabling SSL for testing: `VERTICA_SSL=false`
 
-### Query Execution Issues
+#### Permission Issues
 
-1. **Permission Errors:**
-   - Ensure the database user has SELECT permissions on target schemas
-   - Check that the user can access system catalogs (`v_catalog.*`)
+- Ensure the database user has SELECT permissions on target schemas
+- Check that the user can access system catalogs (`v_catalog.*`)
 
-2. **Query Timeouts:**
+#### Query Performance
+
+1. **Query Timeouts:**
    - Increase `VERTICA_QUERY_TIMEOUT` for complex queries
    - Use `stream_query` for large result sets
 
-3. **Schema Access:**
-   - Verify schema names are correct (case-sensitive)
-   - Check that tables exist in the specified schema
-
-### Performance Optimization
-
-1. **Connection Pooling:**
-   - Adjust `VERTICA_CONNECTION_LIMIT` based on workload
-   - Monitor connection usage in Vertica system tables
-
-2. **Query Performance:**
-   - Use appropriate WHERE clauses to limit result sets
-   - Leverage Vertica's columnar storage with projection-aware queries
-   - Use `EXPLAIN` to analyze query plans
-
-3. **Batch Size Tuning:**
+2. **Batch Size Tuning:**
    - Adjust `batchSize` in `stream_query` based on memory constraints
    - Monitor network latency and adjust accordingly
+
+### Version Updates
+
+```bash
+# Update to latest version
+npx @hechtcarmel/vertica-mcp@latest
+
+# Check your current version
+npx @hechtcarmel/vertica-mcp --version
+
+# Clear npm cache if needed
+npm cache clean --force
+```
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/new-feature`
 3. Make your changes following the existing code style and architecture
-4. Run code quality checks: `pnpm run check`
+4. Run code quality checks: `npm run check`
 5. Test thoroughly with a real Vertica database
 6. Submit a pull request with a clear description
 
@@ -526,53 +364,63 @@ If you're still having issues:
 
 When contributing to this project, please follow these guidelines:
 
-- **Follow MCP patterns**: All new tools should extend `MCPTool<InputType>` and use proper schema format
-- **Use proper schemas**: Define schemas with `type` and `description` properties as per mcp-framework
+- **Follow MCP patterns**: All new tools should implement `MCPTool` interface
+- **Use proper schemas**: Define schemas with `type` and `description` properties
 - **Add constants**: Put magic numbers/strings in `src/constants/index.ts`
 - **Create utilities**: Extract reusable logic into `src/utils/` modules
-- **Type everything**: Use TypeScript types extensively, define proper input interfaces
-- **Validate inputs**: Use the validation utilities in `table-helpers.ts`
-- **Handle errors properly**: Use structured error types and proper cleanup in finally blocks
-- **Test with npx**: Always test tools work correctly when run via `npx` before publishing
+- **Type everything**: Use TypeScript types extensively
+- **Validate inputs**: Use Zod schemas for input validation
+- **Handle errors properly**: Use structured error types and proper cleanup
+- **Test with npx**: Always test tools work correctly when run via `npx`
 
 ## Changelog
 
-### v1.1.0 (Latest)
-- **🚀 Major**: Migrated to official MCP SDK (`@modelcontextprotocol/sdk`) for improved compatibility
+### v1.2.2 (Current)
+- **🔧 Enhanced**: Improved connection handling and error management
+- **📦 Updated**: Latest dependencies and security patches
+- **🏗️ Stable**: Production-ready release with comprehensive testing
+
+### v1.1.0
+- **🚀 Major**: Migrated to official MCP SDK (`@modelcontextprotocol/sdk`)
 - **🔧 Enhanced**: All tools now use proper JSON Schema validation with Zod
-- **📦 Improved**: Better error handling and type safety throughout the codebase
-- **🏗️ Architecture**: Maintained clean separation of concerns while adopting official SDK patterns
+- **📦 Improved**: Better error handling and type safety throughout
 - **⚡ Performance**: Improved protocol compliance and message handling
-- **🔒 Future-proof**: Now uses the official SDK ensuring long-term compatibility and support
 
 ### v1.0.9
-- **🔧 Fixed**: MCP framework compatibility issues that prevented tools from loading
+- **🔧 Fixed**: MCP framework compatibility issues
 - **🔧 Fixed**: NPX execution now works correctly with all MCP clients
-- **🔧 Fixed**: Tool discovery and registration following proper mcp-framework patterns
-- **🔧 Fixed**: Schema format updated to use correct `type` and `description` properties
-- **♻️ Refactored**: Removed custom BaseTool class in favor of standard MCPTool implementation
-- **📦 Improved**: Better error handling with proper service cleanup
-- **📚 Updated**: Documentation to reflect new architecture and troubleshooting steps
-
-### v1.0.0
-- **🎉 Initial**: First release with basic Vertica MCP server functionality
-- **⚠️ Known Issue**: Tools not loading correctly with npx (fixed in v1.0.9)
+- **♻️ Refactored**: Improved tool architecture and error handling
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Support
 
 For issues and questions:
 1. Check the troubleshooting section above
 2. Review Vertica documentation for database-specific issues
-3. Open an issue on the project repository with detailed information
+3. Open an issue on the [GitHub repository](https://github.com/hechtcarmel/vertica-mcp/issues)
 
-## Quick Start Examples
+## Quick Examples
 
-### Example 1: Cursor with custom .env file (Recommended)
-1. Create `~/.config/vertica/production.env`:
+### Cursor Configuration Example
+```json
+{
+  "mcpServers": {
+    "vertica-mcp": {
+      "command": "npx",
+      "args": [
+        "@hechtcarmel/vertica-mcp@1.2.2",
+        "--env-file",
+        "/Users/yourusername/.cursor/vertica.env"
+      ]
+    }
+  }
+}
+```
+
+### Environment File Example
 ```env
 VERTICA_HOST=your-vertica-host.com
 VERTICA_PORT=5433
@@ -580,63 +428,6 @@ VERTICA_DATABASE=your_database
 VERTICA_USER=your_username
 VERTICA_PASSWORD=your_password
 VERTICA_DEFAULT_SCHEMA=public
-```
-
-2. Edit `~/.cursor/mcp.json`:
-```json
-{
-  "mcpServers": {
-    "vertica-mcp": {
-      "command": "npx",
-      "args": ["@hechtcarmel/vertica-mcp", "--env-file", "/Users/yourusername/.config/vertica/production.env"]
-    }
-  }
-}
-```
-
-### Example 2: Claude Desktop with custom .env file
-1. Create `~/.config/claude/vertica.env`:
-```env
-VERTICA_HOST=your-vertica-host.com
-VERTICA_PORT=5433
-VERTICA_DATABASE=your_database
-VERTICA_USER=your_username
-VERTICA_PASSWORD=your_password
-VERTICA_DEFAULT_SCHEMA=public
-```
-
-2. Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
-```json
-{
-  "mcpServers": {
-    "vertica-mcp": {
-      "command": "npx",
-      "args": ["@hechtcarmel/vertica-mcp", "--env-file", "/Users/yourusername/.config/claude/vertica.env"]
-    }
-  }
-}
-```
-
-### Example 3: Direct usage
-```bash
-# Using custom env file
-npx @hechtcarmel/vertica-mcp --env-file /path/to/your/.env
-
-# Using environment variables
-export VERTICA_HOST=your-host.com
-export VERTICA_PORT=5433
-export VERTICA_DATABASE=your_db
-export VERTICA_USER=your_user
-export VERTICA_PASSWORD=your_password
-
-# Run the MCP server (latest version)
-npx @hechtcarmel/vertica-mcp@latest
-
-# Or specify exact version with custom env file
-npx @hechtcarmel/vertica-mcp@1.0.9 --env-file /path/to/production.env
-
-# Show help
-npx @hechtcarmel/vertica-mcp --help
 ```
 
 ---
