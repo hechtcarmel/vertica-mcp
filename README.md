@@ -2,6 +2,8 @@
 
 A Model Context Protocol (MCP) server for readonly communication with Vertica databases. This server enables AI assistants like Claude to interact with Vertica databases safely through a comprehensive set of readonly operations.
 
+> **Latest Update (v1.0.9)**: Fixed MCP framework compatibility issues. The server now works correctly with `npx` and properly loads all tools when used with Claude Desktop, Cursor, and other MCP clients.
+
 ## Features
 
 - 🔒 **Readonly Operations Only** - Ensures database safety with SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH queries only
@@ -323,12 +325,11 @@ vertica-mcp/
 
 This project follows modern TypeScript best practices and clean architecture principles:
 
-#### **Base Classes**
-- `BaseTool`: Abstract base class for all MCP tools that provides:
-  - Consistent error handling and response formatting
-  - Automatic service lifecycle management (connection/cleanup)
-  - Input validation utilities
-  - Reduced code duplication across tools
+#### **MCP Framework Integration**
+- All tools extend `MCPTool<InputType>` from mcp-framework for proper compatibility
+- Uses standard MCP schema format with `type` and `description` properties
+- Implements proper tool discovery and registration patterns
+- Full compatibility with npx execution and MCP clients
 
 #### **Utility Modules**
 - `response-formatter.ts`: Standardized API response formatting
@@ -339,10 +340,11 @@ This project follows modern TypeScript best practices and clean architecture pri
 - Structured error types with detailed context
 - Consistent error responses across all tools
 - Proper TypeScript error typing
+- Graceful service cleanup in finally blocks
 
 #### **Code Quality Features**
-- **DRY Principle**: Eliminated code duplication through base classes and utilities
-- **Type Safety**: Comprehensive TypeScript types with minimal `any` usage
+- **MCP Compliance**: Full adherence to MCP framework patterns and best practices
+- **Type Safety**: Comprehensive TypeScript types with proper input validation
 - **Separation of Concerns**: Clear separation between business logic, utilities, and infrastructure
 - **Input Validation**: Centralized validation for SQL identifiers and parameters
 - **Resource Management**: Automatic cleanup of database connections
@@ -383,6 +385,18 @@ VERTICA_HOST=testhost pnpm start
 ## Troubleshooting
 
 ### Common Issues
+
+```bash
+# Update to latest version
+npx @hechtcarmel/vertica-mcp@latest
+
+# Or check your current version
+npx @hechtcarmel/vertica-mcp --version
+```
+
+If you're still having issues:
+1. Clear npm cache: `npm cache clean --force`
+2. Try running with explicit version: `npx @hechtcarmel/vertica-mcp@1.0.9`
 
 #### "Client is not a constructor" Error
 
@@ -463,13 +477,29 @@ VERTICA_HOST=testhost pnpm start
 
 When contributing to this project, please follow these guidelines:
 
-- **Use the BaseTool class**: All new tools should extend `BaseTool` for consistency
+- **Follow MCP patterns**: All new tools should extend `MCPTool<InputType>` and use proper schema format
+- **Use proper schemas**: Define schemas with `type` and `description` properties as per mcp-framework
 - **Add constants**: Put magic numbers/strings in `src/constants/index.ts`
 - **Create utilities**: Extract reusable logic into `src/utils/` modules
-- **Type everything**: Use TypeScript types extensively, avoid `any`
+- **Type everything**: Use TypeScript types extensively, define proper input interfaces
 - **Validate inputs**: Use the validation utilities in `table-helpers.ts`
-- **Handle errors properly**: Use structured error types from `src/types/errors.ts`
-- **Follow DRY principles**: Reuse existing utilities and formatters
+- **Handle errors properly**: Use structured error types and proper cleanup in finally blocks
+- **Test with npx**: Always test tools work correctly when run via `npx` before publishing
+
+## Changelog
+
+### v1.0.9 (Latest)
+- **🔧 Fixed**: MCP framework compatibility issues that prevented tools from loading
+- **🔧 Fixed**: NPX execution now works correctly with all MCP clients
+- **🔧 Fixed**: Tool discovery and registration following proper mcp-framework patterns
+- **🔧 Fixed**: Schema format updated to use correct `type` and `description` properties
+- **♻️ Refactored**: Removed custom BaseTool class in favor of standard MCPTool implementation
+- **📦 Improved**: Better error handling with proper service cleanup
+- **📚 Updated**: Documentation to reflect new architecture and troubleshooting steps
+
+### v1.0.0
+- **🎉 Initial**: First release with basic Vertica MCP server functionality
+- **⚠️ Known Issue**: Tools not loading correctly with npx (fixed in v1.0.9)
 
 ## License
 
@@ -541,8 +571,11 @@ export VERTICA_DATABASE=your_db
 export VERTICA_USER=your_user
 export VERTICA_PASSWORD=your_password
 
-# Run the MCP server
-npx @hechtcarmel/vertica-mcp
+# Run the MCP server (latest version)
+npx @hechtcarmel/vertica-mcp@latest
+
+# Or specify exact version
+npx @hechtcarmel/vertica-mcp@1.0.9
 ```
 
 ---

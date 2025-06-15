@@ -8,7 +8,7 @@ interface ListIndexesInput {
   schemaName?: string;
 }
 
-export default class ListIndexesTool extends MCPTool<ListIndexesInput> {
+class ListIndexesTool extends MCPTool<ListIndexesInput> {
   name = "list_indexes";
   description =
     "List indexes (projections) for a specific table in Vertica with column and uniqueness information";
@@ -26,41 +26,38 @@ export default class ListIndexesTool extends MCPTool<ListIndexesInput> {
   };
 
   async execute(input: ListIndexesInput) {
+    let verticaService: VerticaService | null = null;
+
     try {
       // Create Vertica service instance
       const config = getDatabaseConfig();
-      const verticaService = new VerticaService(config);
+      verticaService = new VerticaService(config);
 
-      try {
-        // List indexes
-        const indexes = await verticaService.listIndexes(
-          input.tableName,
-          input.schemaName
-        );
+      // List indexes
+      const indexes = await verticaService.listIndexes(
+        input.tableName,
+        input.schemaName
+      );
 
-        return JSON.stringify(
-          {
-            success: true,
-            table: input.tableName,
-            schema: input.schemaName ?? config.defaultSchema ?? "public",
-            indexCount: indexes.length,
-            indexes: indexes.map((index) => ({
-              indexName: index.indexName,
-              columnName: index.columnName,
-              isUnique: index.isUnique,
-              indexType: index.indexType,
-              ordinalPosition: index.ordinalPosition,
-            })),
-            note: "In Vertica, indexes are implemented as projections which provide similar functionality",
-            queriedAt: new Date().toISOString(),
-          },
-          null,
-          2
-        );
-      } finally {
-        // Always disconnect
-        await verticaService.disconnect();
-      }
+      return JSON.stringify(
+        {
+          success: true,
+          table: input.tableName,
+          schema: input.schemaName ?? config.defaultSchema ?? "public",
+          indexCount: indexes.length,
+          indexes: indexes.map((index) => ({
+            indexName: index.indexName,
+            columnName: index.columnName,
+            isUnique: index.isUnique,
+            indexType: index.indexType,
+            ordinalPosition: index.ordinalPosition,
+          })),
+          note: "In Vertica, indexes are implemented as projections which provide similar functionality",
+          queriedAt: new Date().toISOString(),
+        },
+        null,
+        2
+      );
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -76,6 +73,16 @@ export default class ListIndexesTool extends MCPTool<ListIndexesInput> {
         null,
         2
       );
+    } finally {
+      if (verticaService) {
+        try {
+          await verticaService.disconnect();
+        } catch (error) {
+          console.warn("Warning during service cleanup:", error);
+        }
+      }
     }
   }
 }
+
+export default ListIndexesTool;

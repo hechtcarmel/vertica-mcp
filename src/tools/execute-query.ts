@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { BaseTool } from "../base/base-tool.js";
+import { MCPTool } from "mcp-framework";
+import { VerticaService } from "../services/vertica-service.js";
+import { getDatabaseConfig } from "../config/database.js";
 import { formatQueryResult } from "../utils/response-formatter.js";
 
 interface ExecuteQueryInput {
@@ -7,17 +9,7 @@ interface ExecuteQueryInput {
   params?: unknown[];
 }
 
-interface ExecuteQueryOutput {
-  query: string;
-  rowCount: number;
-  fields: Array<{ name: string; dataType: string }>;
-  rows: Record<string, unknown>[];
-}
-
-export default class ExecuteQueryTool extends BaseTool<
-  ExecuteQueryInput,
-  ExecuteQueryOutput
-> {
+class ExecuteQueryTool extends MCPTool<ExecuteQueryInput> {
   name = "execute_query";
   description =
     "Execute a readonly SQL query against the Vertica database. Supports SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH queries.";
@@ -34,21 +26,54 @@ export default class ExecuteQueryTool extends BaseTool<
     },
   };
 
-  protected async executeOperation(
-    input: ExecuteQueryInput
-  ): Promise<ExecuteQueryOutput> {
-    const service = await this.getService();
+  async execute(input: ExecuteQueryInput) {
+    let service: VerticaService | null = null;
 
-    const result = await service.executeQuery(input.sql, input.params || []);
+    try {
+      const config = getDatabaseConfig();
+      service = new VerticaService(config);
 
-    const formatted = formatQueryResult({
-      ...result,
-      query: input.sql,
-    });
+      const result = await service.executeQuery(input.sql, input.params || []);
 
-    return {
-      ...formatted,
-      query: input.sql, // Ensure query is always defined
-    };
+      const formatted = formatQueryResult({
+        ...result,
+        query: input.sql,
+      });
+
+      return JSON.stringify(
+        {
+          success: true,
+          ...formatted,
+          query: input.sql,
+          executedAt: new Date().toISOString(),
+        },
+        null,
+        2
+      );
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      return JSON.stringify(
+        {
+          success: false,
+          error: errorMessage,
+          query: input.sql,
+          executedAt: new Date().toISOString(),
+        },
+        null,
+        2
+      );
+    } finally {
+      if (service) {
+        try {
+          await service.disconnect();
+        } catch (error) {
+          console.warn("Warning during service cleanup:", error);
+        }
+      }
+    }
   }
 }
+
+export default ExecuteQueryTool;

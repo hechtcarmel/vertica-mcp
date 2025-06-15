@@ -9,7 +9,7 @@ interface StreamQueryInput {
   maxRows?: number;
 }
 
-export default class StreamQueryTool extends MCPTool<StreamQueryInput> {
+class StreamQueryTool extends MCPTool<StreamQueryInput> {
   name = "stream_query";
   description =
     "Stream large query results in batches to handle datasets efficiently without memory issues.";
@@ -31,57 +31,54 @@ export default class StreamQueryTool extends MCPTool<StreamQueryInput> {
   };
 
   async execute(input: StreamQueryInput) {
+    let verticaService: VerticaService | null = null;
+
     try {
       // Create Vertica service instance
       const config = getDatabaseConfig();
-      const verticaService = new VerticaService(config);
+      verticaService = new VerticaService(config);
 
-      try {
-        const batches = [];
-        let totalRows = 0;
-        const batchSize = input.batchSize || 1000;
+      const batches = [];
+      let totalRows = 0;
+      const batchSize = input.batchSize || 1000;
 
-        // Stream the query results
-        for await (const batch of verticaService.streamQuery(input.sql, {
-          batchSize,
-          maxRows: input.maxRows,
-        })) {
-          batches.push({
-            batchNumber: batch.batchNumber,
-            rowCount: batch.batch.length,
-            rows: batch.batch,
-            hasMore: batch.hasMore,
-            fields: batch.fields.map((field) => ({
-              name: field.name,
-              dataType: field.format,
-            })),
-          });
+      // Stream the query results
+      for await (const batch of verticaService.streamQuery(input.sql, {
+        batchSize,
+        maxRows: input.maxRows,
+      })) {
+        batches.push({
+          batchNumber: batch.batchNumber,
+          rowCount: batch.batch.length,
+          rows: batch.batch,
+          hasMore: batch.hasMore,
+          fields: batch.fields.map((field) => ({
+            name: field.name,
+            dataType: field.format,
+          })),
+        });
 
-          totalRows += batch.batch.length;
+        totalRows += batch.batch.length;
 
-          // Safety break if we've collected too many batches
-          if (batches.length > 100) {
-            break;
-          }
+        // Safety break if we've collected too many batches
+        if (batches.length > 100) {
+          break;
         }
-
-        return JSON.stringify(
-          {
-            success: true,
-            query: input.sql,
-            totalRows,
-            batchCount: batches.length,
-            batchSize,
-            batches,
-            executedAt: new Date().toISOString(),
-          },
-          null,
-          2
-        );
-      } finally {
-        // Always disconnect
-        await verticaService.disconnect();
       }
+
+      return JSON.stringify(
+        {
+          success: true,
+          query: input.sql,
+          totalRows,
+          batchCount: batches.length,
+          batchSize,
+          batches,
+          executedAt: new Date().toISOString(),
+        },
+        null,
+        2
+      );
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -96,6 +93,16 @@ export default class StreamQueryTool extends MCPTool<StreamQueryInput> {
         null,
         2
       );
+    } finally {
+      if (verticaService) {
+        try {
+          await verticaService.disconnect();
+        } catch (error) {
+          console.warn("Warning during service cleanup:", error);
+        }
+      }
     }
   }
 }
+
+export default StreamQueryTool;

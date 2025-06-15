@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import "dotenv/config";
 import { MCPServer } from "mcp-framework";
 import { LOG_MESSAGES } from "./constants/index.js";
 import process from "node:process";

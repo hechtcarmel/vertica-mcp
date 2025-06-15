@@ -7,7 +7,7 @@ interface ListViewsInput {
   schemaName?: string;
 }
 
-export default class ListViewsTool extends MCPTool<ListViewsInput> {
+class ListViewsTool extends MCPTool<ListViewsInput> {
   name = "list_views";
   description =
     "List all views in a schema with their definitions and metadata";
@@ -21,38 +21,35 @@ export default class ListViewsTool extends MCPTool<ListViewsInput> {
   };
 
   async execute(input: ListViewsInput) {
+    let verticaService: VerticaService | null = null;
+
     try {
       // Create Vertica service instance
       const config = getDatabaseConfig();
-      const verticaService = new VerticaService(config);
+      verticaService = new VerticaService(config);
 
-      try {
-        // List views
-        const views = await verticaService.listViews(input.schemaName);
+      // List views
+      const views = await verticaService.listViews(input.schemaName);
 
-        return JSON.stringify(
-          {
-            success: true,
-            schema: input.schemaName || config.defaultSchema || "public",
-            viewCount: views.length,
-            views: views.map((view) => ({
-              schemaName: view.schemaName,
-              viewName: view.viewName,
-              owner: view.owner,
-              comment: view.comment,
-              definition:
-                view.definition.substring(0, 200) +
-                (view.definition.length > 200 ? "..." : ""),
-            })),
-            queriedAt: new Date().toISOString(),
-          },
-          null,
-          2
-        );
-      } finally {
-        // Always disconnect
-        await verticaService.disconnect();
-      }
+      return JSON.stringify(
+        {
+          success: true,
+          schema: input.schemaName || config.defaultSchema || "public",
+          viewCount: views.length,
+          views: views.map((view) => ({
+            schemaName: view.schemaName,
+            viewName: view.viewName,
+            owner: view.owner,
+            comment: view.comment,
+            definition:
+              view.definition.substring(0, 200) +
+              (view.definition.length > 200 ? "..." : ""),
+          })),
+          queriedAt: new Date().toISOString(),
+        },
+        null,
+        2
+      );
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -67,6 +64,16 @@ export default class ListViewsTool extends MCPTool<ListViewsInput> {
         null,
         2
       );
+    } finally {
+      if (verticaService) {
+        try {
+          await verticaService.disconnect();
+        } catch (error) {
+          console.warn("Warning during service cleanup:", error);
+        }
+      }
     }
   }
 }
+
+export default ListViewsTool;
