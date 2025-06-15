@@ -1,6 +1,71 @@
 #!/usr/bin/env node
 
-import "dotenv/config";
+import { parseArgs } from "node:util";
+import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+import dotenv from "dotenv";
+
+// Parse command line arguments
+const { values } = parseArgs({
+  args: process.argv.slice(2),
+  options: {
+    "env-file": {
+      type: "string",
+      short: "e",
+    },
+    help: {
+      type: "boolean",
+      short: "h",
+    },
+    version: {
+      type: "boolean",
+      short: "v",
+    },
+  },
+  allowPositionals: false,
+});
+
+// Handle help flag
+if (values.help) {
+  console.log(`
+Vertica MCP Server
+
+Usage: npx @hechtcarmel/vertica-mcp [options]
+
+Options:
+  -e, --env-file <path>    Path to environment file (default: .env in current directory)
+  -h, --help              Show this help message
+  -v, --version           Show version number
+
+Examples:
+  npx @hechtcarmel/vertica-mcp
+  npx @hechtcarmel/vertica-mcp --env-file /path/to/custom.env
+  npx @hechtcarmel/vertica-mcp -e ~/.config/vertica/production.env
+`);
+  process.exit(0);
+}
+
+// Handle version flag
+if (values.version) {
+  console.log("1.1.0");
+  process.exit(0);
+}
+
+// Load environment file
+const envFile = values["env-file"];
+if (envFile) {
+  const envPath = resolve(envFile);
+  if (!existsSync(envPath)) {
+    console.error(`Error: Environment file not found: ${envPath}`);
+    process.exit(1);
+  }
+  console.error(`Loading environment from: ${envPath}`);
+  dotenv.config({ path: envPath });
+} else {
+  // Load default .env file if it exists
+  dotenv.config();
+}
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {

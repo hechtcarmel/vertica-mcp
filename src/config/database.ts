@@ -1,10 +1,6 @@
 import { z } from "zod";
-import dotenv from "dotenv";
 import type { VerticaConfig } from "../types/vertica.js";
 import { DATABASE_CONSTANTS } from "../constants/index.js";
-
-// Load environment variables
-dotenv.config();
 
 // Zod schema for validating configuration
 const ConfigSchema = z.object({

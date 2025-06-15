@@ -30,9 +30,12 @@ The easiest way to use this MCP server is via npm:
 # Run directly with npx (no installation required)
 npx @hechtcarmel/vertica-mcp
 
+# Run with custom environment file
+npx @hechtcarmel/vertica-mcp --env-file /path/to/your/.env
+
 # Or install globally
 npm install -g @hechtcarmel/vertica-mcp
-vertica-mcp
+vertica-mcp --env-file /path/to/your/.env
 ```
 
 ### From Source
@@ -84,11 +87,20 @@ VERTICA_DEFAULT_SCHEMA=public
 ### Running the Server
 
 ```bash
-# Start the MCP server
+# Start the MCP server (uses .env in current directory)
 pnpm start
+
+# Start with custom environment file
+node dist/index.js --env-file /path/to/custom.env
 
 # Or for development with auto-rebuild
 pnpm run dev
+
+# Show help and available options
+npx @hechtcarmel/vertica-mcp --help
+
+# Show version
+npx @hechtcarmel/vertica-mcp --version
 ```
 
 ### Claude Desktop Configuration
@@ -98,7 +110,19 @@ Add the following to your Claude Desktop configuration file:
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
 
-#### Option 1: Using npx with .env file (Recommended)
+#### Option 1: Using npx with custom .env file (Recommended)
+```json
+{
+  "mcpServers": {
+    "vertica-mcp": {
+      "command": "npx",
+      "args": ["@hechtcarmel/vertica-mcp", "--env-file", "/absolute/path/to/your/.env"]
+    }
+  }
+}
+```
+
+#### Option 2: Using npx with .env file in working directory
 ```json
 {
   "mcpServers": {
@@ -132,13 +156,32 @@ VERTICA_SSL_REJECT_UNAUTHORIZED=true
 VERTICA_DEFAULT_SCHEMA=public
 ```
 
-#### Option 3: From source (development)
+#### Option 3: Using npx with inline environment variables
+```json
+{
+  "mcpServers": {
+    "vertica-mcp": {
+      "command": "npx",
+      "args": ["@hechtcarmel/vertica-mcp"],
+      "env": {
+        "VERTICA_HOST": "localhost",
+        "VERTICA_PORT": "5433",
+        "VERTICA_DATABASE": "VMart",
+        "VERTICA_USER": "dbadmin",
+        "VERTICA_PASSWORD": "your_password"
+      }
+    }
+  }
+}
+```
+
+#### Option 4: From source (development)
 ```json
 {
   "mcpServers": {
     "vertica-mcp": {
       "command": "node",
-      "args": ["/absolute/path/to/vertica-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/vertica-mcp/dist/index.js", "--env-file", "/path/to/.env"],
       "env": {
         "VERTICA_HOST": "localhost",
         "VERTICA_PORT": "5433",
@@ -153,7 +196,15 @@ VERTICA_DEFAULT_SCHEMA=public
 
 ### Using with Cursor
 
-#### Option 1: Using npx with .env file (Recommended)
+#### Option 1: Using npx with custom .env file (Recommended)
+1. Create a `.env` file anywhere on your system (e.g., `~/.config/vertica/production.env`)
+2. Add your Vertica connection details to the `.env` file
+3. In Cursor settings, add a new MCP server:
+   - **Name**: `vertica-mcp`
+   - **Command**: `npx`
+   - **Arguments**: `["@hechtcarmel/vertica-mcp", "--env-file", "/absolute/path/to/your/.env"]`
+
+#### Option 1b: Using npx with .env file in working directory
 1. Create a `.env` file in a directory (e.g., `~/.cursor/vertica.env`)
 2. Add your Vertica connection details to the `.env` file
 3. In Cursor settings, add a new MCP server:
@@ -177,8 +228,8 @@ VERTICA_DEFAULT_SCHEMA=public
 3. Add a new server with:
    - **Name**: `vertica-mcp`
    - **Command**: `node`
-   - **Arguments**: `["/path/to/vertica-mcp/dist/index.js"]`
-   - **Environment variables**: Add your database connection details
+   - **Arguments**: `["/path/to/vertica-mcp/dist/index.js", "--env-file", "/path/to/.env"]`
+   - **Environment variables**: Add your database connection details (optional if using --env-file)
 
 ## Available Tools
 
@@ -520,8 +571,8 @@ For issues and questions:
 
 ## Quick Start Examples
 
-### Example 1: Cursor with .env file (Recommended)
-1. Create `~/.cursor/vertica.env`:
+### Example 1: Cursor with custom .env file (Recommended)
+1. Create `~/.config/vertica/production.env`:
 ```env
 VERTICA_HOST=your-vertica-host.com
 VERTICA_PORT=5433
@@ -537,14 +588,13 @@ VERTICA_DEFAULT_SCHEMA=public
   "mcpServers": {
     "vertica-mcp": {
       "command": "npx",
-      "args": ["@hechtcarmel/vertica-mcp"],
-      "cwd": "/Users/yourusername/.cursor"
+      "args": ["@hechtcarmel/vertica-mcp", "--env-file", "/Users/yourusername/.config/vertica/production.env"]
     }
   }
 }
 ```
 
-### Example 2: Claude Desktop with .env file
+### Example 2: Claude Desktop with custom .env file
 1. Create `~/.config/claude/vertica.env`:
 ```env
 VERTICA_HOST=your-vertica-host.com
@@ -561,8 +611,7 @@ VERTICA_DEFAULT_SCHEMA=public
   "mcpServers": {
     "vertica-mcp": {
       "command": "npx",
-      "args": ["@hechtcarmel/vertica-mcp"],
-      "cwd": "/Users/yourusername/.config/claude"
+      "args": ["@hechtcarmel/vertica-mcp", "--env-file", "/Users/yourusername/.config/claude/vertica.env"]
     }
   }
 }
@@ -570,7 +619,10 @@ VERTICA_DEFAULT_SCHEMA=public
 
 ### Example 3: Direct usage
 ```bash
-# Set environment variables and run
+# Using custom env file
+npx @hechtcarmel/vertica-mcp --env-file /path/to/your/.env
+
+# Using environment variables
 export VERTICA_HOST=your-host.com
 export VERTICA_PORT=5433
 export VERTICA_DATABASE=your_db
@@ -580,8 +632,11 @@ export VERTICA_PASSWORD=your_password
 # Run the MCP server (latest version)
 npx @hechtcarmel/vertica-mcp@latest
 
-# Or specify exact version
-npx @hechtcarmel/vertica-mcp@1.0.9
+# Or specify exact version with custom env file
+npx @hechtcarmel/vertica-mcp@1.0.9 --env-file /path/to/production.env
+
+# Show help
+npx @hechtcarmel/vertica-mcp --help
 ```
 
 ---
