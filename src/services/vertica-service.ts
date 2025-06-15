@@ -72,7 +72,10 @@ export class VerticaService {
             : SSL_MODES.REQUIRE;
         }
       } else {
+        // Explicitly disable SSL/TLS for Vertica
         clientConfig.tls_mode = SSL_MODES.DISABLE;
+        clientConfig.ssl = false;
+        clientConfig.tls = false;
       }
 
       const client = new verticaTyped.Client(clientConfig);
