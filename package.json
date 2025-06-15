@@ -1,5 +1,5 @@
 {
-  "name": "@your-username/vertica-mcp",
+  "name": "@hechtcarmel/vertica-mcp",
   "version": "1.0.0",
   "description": "MCP (Model Context Protocol) server for readonly Vertica database operations",
   "main": "dist/index.js",
