@@ -29,12 +29,6 @@ export const TABLE_TYPES = {
   VIEW: "VIEW",
 } as const;
 
-export const SSL_MODES = {
-  DISABLE: "disable",
-  REQUIRE: "require",
-  VERIFY_FULL: "verify-full",
-} as const;
-
 export const LOG_MESSAGES = {
   SERVER_STARTING: "🚀 Starting Vertica MCP Server...",
   SERVER_READY:

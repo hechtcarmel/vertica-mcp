@@ -47,7 +47,7 @@ Examples:
 
 // Handle version flag
 if (values.version) {
-  console.log("1.2.1");
+  console.log("1.2.2");
   process.exit(0);
 }
 
@@ -85,7 +85,7 @@ import GetTableStructureTool from "./tools/get-table-structure.js";
 const server = new Server(
   {
     name: "@hechtcarmel/vertica-mcp",
-    version: "1.2.1",
+    version: "1.2.2",
   },
   {
     capabilities: {

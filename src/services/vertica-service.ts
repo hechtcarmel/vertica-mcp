@@ -11,11 +11,7 @@ import type {
   StreamQueryOptions,
   StreamQueryResult,
 } from "../types/vertica.js";
-import {
-  READONLY_QUERY_PREFIXES,
-  SSL_MODES,
-  LOG_MESSAGES,
-} from "../constants/index.js";
+import { READONLY_QUERY_PREFIXES, LOG_MESSAGES } from "../constants/index.js";
 import {
   determineTableType,
   resolveSchemaName,
@@ -63,19 +59,15 @@ export class VerticaService {
       };
 
       // Add SSL/TLS configuration if specified
+      // Note: vertica-nodejs client uses different SSL configuration than the old vertica package
       if (this.config.ssl) {
-        clientConfig.tls_mode = SSL_MODES.REQUIRE;
+        clientConfig.ssl = true;
         if (this.config.sslRejectUnauthorized !== undefined) {
-          // Note: Vertica uses tls_mode for SSL control
-          clientConfig.tls_mode = this.config.sslRejectUnauthorized
-            ? SSL_MODES.VERIFY_FULL
-            : SSL_MODES.REQUIRE;
+          clientConfig.ssl = this.config.sslRejectUnauthorized;
         }
       } else {
-        // Explicitly disable SSL/TLS for Vertica
-        clientConfig.tls_mode = SSL_MODES.DISABLE;
+        // Explicitly disable SSL/TLS for vertica-nodejs client
         clientConfig.ssl = false;
-        clientConfig.tls = false;
       }
 
       const client = new verticaTyped.Client(clientConfig);
