@@ -24,6 +24,9 @@
     "prebuild": "npm run clean",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
     "test:connection": "npm run build && VERTICA_HOST=localhost npm start",
     "format": "prettier --write 'src/**/*.{ts,js,json}'",
     "check": "npm run typecheck && npm run build",
@@ -32,7 +35,7 @@
   "keywords": [
     "mcp",
     "vertica",
-    "database", 
+    "database",
     "model-context-protocol",
     "claude",
     "ai",
@@ -51,13 +54,17 @@
   "homepage": "https://github.com/hechtcarmel/vertica-mcp#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.3",
+    "dotenv": "^16.3.1",
     "vertica-nodejs": "^1.1.4",
-    "zod": "^3.22.4",
-    "dotenv": "^16.3.1"
+    "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@jest/globals": "^30.0.0",
+    "@types/jest": "^29.5.14",
     "@types/node": "^20.19.0",
-    "typescript": "^5.7.2",
-    "prettier": "^3.3.3"
+    "jest": "^30.0.0",
+    "prettier": "^3.3.3",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.7.2"
   }
 }
