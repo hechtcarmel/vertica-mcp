@@ -22,6 +22,7 @@ describe("database config", () => {
     delete process.env.VERTICA_SSL;
     delete process.env.VERTICA_SSL_REJECT_UNAUTHORIZED;
     delete process.env.VERTICA_DEFAULT_SCHEMA;
+    delete process.env.VERTICA_READONLY_MODE;
   });
 
   afterEach(() => {
@@ -41,6 +42,7 @@ describe("database config", () => {
       process.env.VERTICA_SSL = "true";
       process.env.VERTICA_SSL_REJECT_UNAUTHORIZED = "false";
       process.env.VERTICA_DEFAULT_SCHEMA = "custom";
+      process.env.VERTICA_READONLY_MODE = "false";
 
       const config = loadDatabaseConfig();
 
@@ -55,6 +57,7 @@ describe("database config", () => {
         ssl: true,
         sslRejectUnauthorized: true,
         defaultSchema: "custom",
+        readonlyMode: false,
       });
     });
 
@@ -71,6 +74,7 @@ describe("database config", () => {
       expect(config.ssl).toBe(false); // default
       expect(config.sslRejectUnauthorized).toBe(true); // default
       expect(config.defaultSchema).toBe("public"); // default
+      expect(config.readonlyMode).toBe(true); // default
     });
 
     it("should handle boolean string values (any string becomes true)", () => {
@@ -168,6 +172,55 @@ describe("database config", () => {
 
       expect(() => loadDatabaseConfig()).toThrow(
         "Invalid database configuration: host: VERTICA_HOST is required"
+      );
+    });
+
+    it("should handle readonly mode configuration", () => {
+      process.env.VERTICA_HOST = "localhost";
+      process.env.VERTICA_DATABASE = "testdb";
+      process.env.VERTICA_USER = "testuser";
+
+      // Test default (should be true)
+      const defaultConfig = loadDatabaseConfig();
+      expect(defaultConfig.readonlyMode).toBe(true);
+
+      // Test explicit true
+      process.env.VERTICA_READONLY_MODE = "true";
+      const trueConfig = loadDatabaseConfig();
+      expect(trueConfig.readonlyMode).toBe(true);
+
+      // Test explicit false
+      process.env.VERTICA_READONLY_MODE = "false";
+      const falseConfig = loadDatabaseConfig();
+      expect(falseConfig.readonlyMode).toBe(false);
+
+      // Test case insensitive
+      process.env.VERTICA_READONLY_MODE = "FALSE";
+      const falseUpperConfig = loadDatabaseConfig();
+      expect(falseUpperConfig.readonlyMode).toBe(false);
+
+      process.env.VERTICA_READONLY_MODE = "TRUE";
+      const trueUpperConfig = loadDatabaseConfig();
+      expect(trueUpperConfig.readonlyMode).toBe(true);
+
+      // Test numeric values
+      process.env.VERTICA_READONLY_MODE = "1";
+      const oneConfig = loadDatabaseConfig();
+      expect(oneConfig.readonlyMode).toBe(true);
+
+      process.env.VERTICA_READONLY_MODE = "0";
+      const zeroConfig = loadDatabaseConfig();
+      expect(zeroConfig.readonlyMode).toBe(false);
+    });
+
+    it("should reject invalid readonly mode values", () => {
+      process.env.VERTICA_HOST = "localhost";
+      process.env.VERTICA_DATABASE = "testdb";
+      process.env.VERTICA_USER = "testuser";
+      process.env.VERTICA_READONLY_MODE = "invalid";
+
+      expect(() => loadDatabaseConfig()).toThrow(
+        "Invalid boolean value: invalid"
       );
     });
   });

@@ -9,6 +9,7 @@ export interface VerticaConfig {
   ssl?: boolean;
   sslRejectUnauthorized?: boolean;
   defaultSchema?: string;
+  readonlyMode?: boolean;
 }
 
 export interface QueryResult {

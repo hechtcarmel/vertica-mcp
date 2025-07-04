@@ -2,6 +2,20 @@ import { z } from "zod";
 import type { VerticaConfig } from "../types/vertica.js";
 import { DATABASE_CONSTANTS } from "../constants/index.js";
 
+// Custom boolean transform that handles string values correctly
+const booleanFromString = z
+  .union([
+    z.boolean(),
+    z.string().transform((val) => {
+      const lower = val.toLowerCase();
+      if (lower === "true" || lower === "1") return true;
+      if (lower === "false" || lower === "0") return false;
+      throw new Error(`Invalid boolean value: ${val}`);
+    }),
+    z.undefined(),
+  ])
+  .transform((val) => val ?? true); // default to true if undefined
+
 // Zod schema for validating configuration
 const ConfigSchema = z.object({
   host: z.string().min(1, "VERTICA_HOST is required"),
@@ -29,6 +43,7 @@ const ConfigSchema = z.object({
   ssl: z.coerce.boolean().default(false),
   sslRejectUnauthorized: z.coerce.boolean().default(true),
   defaultSchema: z.string().default(DATABASE_CONSTANTS.DEFAULT_SCHEMA),
+  readonlyMode: booleanFromString,
 });
 
 /**
@@ -46,6 +61,7 @@ export function loadDatabaseConfig(): VerticaConfig {
     ssl: process.env.VERTICA_SSL,
     sslRejectUnauthorized: process.env.VERTICA_SSL_REJECT_UNAUTHORIZED,
     defaultSchema: process.env.VERTICA_DEFAULT_SCHEMA,
+    readonlyMode: process.env.VERTICA_READONLY_MODE,
   };
 
   try {

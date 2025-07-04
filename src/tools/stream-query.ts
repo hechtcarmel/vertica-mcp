@@ -11,33 +11,81 @@ interface StreamQueryInput {
 
 export default class StreamQueryTool implements MCPTool {
   name = "stream_query";
-  description =
-    "Stream large query results in batches to handle datasets efficiently without memory issues.";
 
-  inputSchema = {
-    type: "object" as const,
-    properties: {
-      sql: {
-        type: "string" as const,
-        description:
-          "SQL query to execute. Must be a readonly query (SELECT, SHOW, DESCRIBE, EXPLAIN, or WITH).",
-      },
-      batchSize: {
-        type: "number" as const,
-        minimum: 1,
-        maximum: 10000,
-        default: 1000,
-        description: "Number of rows per batch (1-10000, default: 1000).",
-      },
-      maxRows: {
-        type: "number" as const,
-        minimum: 1,
-        maximum: 1000000,
-        description: "Maximum total rows to fetch (optional).",
-      },
-    },
-    required: ["sql"],
-  };
+  get description(): string {
+    try {
+      const config = getDatabaseConfig();
+      const isReadonly = config.readonlyMode ?? true;
+
+      if (isReadonly) {
+        return "Stream large readonly query results in batches to handle datasets efficiently. Only SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH queries are allowed.";
+      } else {
+        return "Stream large query results in batches to handle datasets efficiently. All SQL operations are allowed including data modification queries.";
+      }
+    } catch {
+      return "Stream large query results in batches to handle datasets efficiently. Query restrictions depend on configuration.";
+    }
+  }
+
+  get inputSchema() {
+    try {
+      const config = getDatabaseConfig();
+      const isReadonly = config.readonlyMode ?? true;
+
+      const sqlDescription = isReadonly
+        ? "SQL query to execute. Only readonly queries are allowed: SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH."
+        : "SQL query to execute. All SQL operations are allowed including INSERT, UPDATE, DELETE, CREATE, DROP, etc.";
+
+      return {
+        type: "object" as const,
+        properties: {
+          sql: {
+            type: "string" as const,
+            description: sqlDescription,
+          },
+          batchSize: {
+            type: "number" as const,
+            minimum: 1,
+            maximum: 10000,
+            default: 1000,
+            description: "Number of rows per batch (1-10000, default: 1000).",
+          },
+          maxRows: {
+            type: "number" as const,
+            minimum: 1,
+            maximum: 1000000,
+            description: "Maximum total rows to fetch (optional).",
+          },
+        },
+        required: ["sql"],
+      };
+    } catch {
+      return {
+        type: "object" as const,
+        properties: {
+          sql: {
+            type: "string" as const,
+            description:
+              "SQL query to execute. Query restrictions depend on configuration.",
+          },
+          batchSize: {
+            type: "number" as const,
+            minimum: 1,
+            maximum: 10000,
+            default: 1000,
+            description: "Number of rows per batch (1-10000, default: 1000).",
+          },
+          maxRows: {
+            type: "number" as const,
+            minimum: 1,
+            maximum: 1000000,
+            description: "Maximum total rows to fetch (optional).",
+          },
+        },
+        required: ["sql"],
+      };
+    }
+  }
 
   async execute(input: Record<string, unknown>): Promise<string> {
     // Validate input

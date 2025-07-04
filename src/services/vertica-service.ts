@@ -35,9 +35,11 @@ export class VerticaService {
   private config: VerticaConfig;
   private connection: Connection | null = null;
   private readonly readonlyQueryPrefixes = READONLY_QUERY_PREFIXES;
+  private readonly readonlyMode: boolean;
 
   constructor(config: VerticaConfig) {
     this.config = config;
+    this.readonlyMode = config.readonlyMode ?? true;
   }
 
   /**
@@ -117,6 +119,11 @@ export class VerticaService {
    * Validate that a query is readonly
    */
   private validateReadonlyQuery(sql: string): void {
+    // Skip validation if readonly mode is disabled
+    if (!this.readonlyMode) {
+      return;
+    }
+
     const trimmedSql = sql.trim().toUpperCase();
     const isReadonly = this.readonlyQueryPrefixes.some((prefix) =>
       trimmedSql.startsWith(prefix)
@@ -124,9 +131,9 @@ export class VerticaService {
 
     if (!isReadonly) {
       throw new Error(
-        `Only readonly queries are allowed. Query must start with: ${this.readonlyQueryPrefixes.join(
+        `Only readonly queries are allowed (readonly mode is enabled). Query must start with: ${this.readonlyQueryPrefixes.join(
           ", "
-        )}`
+        )}. To allow all queries, set VERTICA_READONLY_MODE=false.`
       );
     }
   }

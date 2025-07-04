@@ -92,7 +92,7 @@ describe("StreamQueryTool", () => {
     });
 
     it("should have description", () => {
-      expect(tool.description).toContain("Stream large query results");
+      expect(tool.description).toContain("Stream large readonly query results");
     });
 
     it("should have valid input schema", () => {

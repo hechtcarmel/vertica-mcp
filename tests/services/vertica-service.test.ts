@@ -180,6 +180,109 @@ describe("VerticaService", () => {
     });
   });
 
+  describe("Readonly Mode Configuration", () => {
+    beforeEach(() => {
+      mockClient.query.mockResolvedValue({
+        rows: [],
+        rowCount: 0,
+        fields: [],
+        command: "SELECT",
+      });
+    });
+
+    it("should allow all queries when readonly mode is disabled", async () => {
+      const configWithReadonlyDisabled = { ...config, readonlyMode: false };
+      const serviceWithReadonlyDisabled = new VerticaService(
+        configWithReadonlyDisabled
+      );
+
+      await expect(
+        serviceWithReadonlyDisabled.executeQuery("SELECT 1")
+      ).resolves.not.toThrow();
+      await expect(
+        serviceWithReadonlyDisabled.executeQuery("INSERT INTO table VALUES (1)")
+      ).resolves.not.toThrow();
+      await expect(
+        serviceWithReadonlyDisabled.executeQuery("UPDATE table SET col = 1")
+      ).resolves.not.toThrow();
+      await expect(
+        serviceWithReadonlyDisabled.executeQuery("DELETE FROM table")
+      ).resolves.not.toThrow();
+      await expect(
+        serviceWithReadonlyDisabled.executeQuery("DROP TABLE table")
+      ).resolves.not.toThrow();
+    });
+
+    it("should enforce readonly queries when readonly mode is enabled", async () => {
+      const configWithReadonlyEnabled = { ...config, readonlyMode: true };
+      const serviceWithReadonlyEnabled = new VerticaService(
+        configWithReadonlyEnabled
+      );
+
+      await expect(
+        serviceWithReadonlyEnabled.executeQuery("SELECT 1")
+      ).resolves.not.toThrow();
+      await expect(
+        serviceWithReadonlyEnabled.executeQuery("INSERT INTO table VALUES (1)")
+      ).rejects.toThrow(
+        "Only readonly queries are allowed (readonly mode is enabled)"
+      );
+    });
+
+    it("should default to readonly mode when not specified", async () => {
+      const configWithoutReadonlyMode = { ...config };
+      delete configWithoutReadonlyMode.readonlyMode;
+      const serviceWithDefaultMode = new VerticaService(
+        configWithoutReadonlyMode
+      );
+
+      await expect(
+        serviceWithDefaultMode.executeQuery("SELECT 1")
+      ).resolves.not.toThrow();
+      await expect(
+        serviceWithDefaultMode.executeQuery("INSERT INTO table VALUES (1)")
+      ).rejects.toThrow(
+        "Only readonly queries are allowed (readonly mode is enabled)"
+      );
+    });
+
+    it("should include helpful error message when readonly mode is enabled", async () => {
+      const configWithReadonlyEnabled = { ...config, readonlyMode: true };
+      const serviceWithReadonlyEnabled = new VerticaService(
+        configWithReadonlyEnabled
+      );
+
+      await expect(
+        serviceWithReadonlyEnabled.executeQuery("INSERT INTO table VALUES (1)")
+      ).rejects.toThrow(
+        "To allow all queries, set VERTICA_READONLY_MODE=false"
+      );
+    });
+
+    it("should apply readonly mode to stream queries as well", async () => {
+      const configWithReadonlyDisabled = { ...config, readonlyMode: false };
+      const serviceWithReadonlyDisabled = new VerticaService(
+        configWithReadonlyDisabled
+      );
+
+      mockClient.query.mockResolvedValue({
+        rows: [],
+        rowCount: 0,
+        fields: [],
+        command: "INSERT",
+      });
+
+      const streamOptions = { batchSize: 100 };
+      const generator = serviceWithReadonlyDisabled.streamQuery(
+        "INSERT INTO table VALUES (1)",
+        streamOptions
+      );
+
+      // Should not throw an error for non-readonly query when readonly mode is disabled
+      await expect(generator.next()).resolves.not.toThrow();
+    });
+  });
+
   describe("Query Execution", () => {
     beforeEach(() => {
       mockClient.connect.mockResolvedValue(undefined);

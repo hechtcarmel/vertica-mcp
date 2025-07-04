@@ -11,25 +11,65 @@ interface ExecuteQueryInput {
 
 export default class ExecuteQueryTool implements MCPTool {
   name = "execute_query";
-  description =
-    "Execute a readonly SQL query against the Vertica database. Supports SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH queries.";
 
-  inputSchema = {
-    type: "object" as const,
-    properties: {
-      sql: {
-        type: "string" as const,
-        description:
-          "SQL query to execute. Must be a readonly query (SELECT, SHOW, DESCRIBE, EXPLAIN, or WITH).",
-      },
-      params: {
-        type: "array" as const,
-        items: {},
-        description: "Optional parameters for parameterized queries.",
-      },
-    },
-    required: ["sql"],
-  };
+  get description(): string {
+    try {
+      const config = getDatabaseConfig();
+      const isReadonly = config.readonlyMode ?? true;
+
+      if (isReadonly) {
+        return "Execute readonly SQL queries against the Vertica database. Only SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH queries are allowed.";
+      } else {
+        return "Execute SQL queries against the Vertica database. All SQL operations are allowed including INSERT, UPDATE, DELETE, CREATE, DROP, etc.";
+      }
+    } catch {
+      return "Execute SQL queries against the Vertica database. Query restrictions depend on configuration.";
+    }
+  }
+
+  get inputSchema() {
+    try {
+      const config = getDatabaseConfig();
+      const isReadonly = config.readonlyMode ?? true;
+
+      const sqlDescription = isReadonly
+        ? "SQL query to execute. Only readonly queries are allowed: SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH."
+        : "SQL query to execute. All SQL operations are allowed including INSERT, UPDATE, DELETE, CREATE, DROP, etc.";
+
+      return {
+        type: "object" as const,
+        properties: {
+          sql: {
+            type: "string" as const,
+            description: sqlDescription,
+          },
+          params: {
+            type: "array" as const,
+            items: {},
+            description: "Optional parameters for parameterized queries.",
+          },
+        },
+        required: ["sql"],
+      };
+    } catch {
+      return {
+        type: "object" as const,
+        properties: {
+          sql: {
+            type: "string" as const,
+            description:
+              "SQL query to execute. Query restrictions depend on configuration.",
+          },
+          params: {
+            type: "array" as const,
+            items: {},
+            description: "Optional parameters for parameterized queries.",
+          },
+        },
+        required: ["sql"],
+      };
+    }
+  }
 
   async execute(input: Record<string, unknown>): Promise<string> {
     // Validate input

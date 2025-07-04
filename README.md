@@ -1,59 +1,41 @@
 # Vertica MCP Server
 
-A Model Context Protocol (MCP) server for readonly communication with Vertica databases. This server enables AI assistants like Claude and Cursor to interact with Vertica databases safely through a comprehensive set of readonly operations.
+A Model Context Protocol (MCP) server that enables AI assistants like Claude and Cursor to interact with Vertica databases safely and efficiently.
 
-## Features
+## 🔒 Safety First
 
-- 🔒 **Readonly Operations Only** - Ensures database safety with SELECT, SHOW, DESCRIBE, EXPLAIN, and WITH queries only
-- 🏗️ **Comprehensive Schema Discovery** - List tables, views, and indexes with detailed metadata
-- 🔍 **Table Structure Analysis** - Get detailed column information, data types, and constraints
-- 📊 **Query Execution** - Execute custom SQL queries with parameter support
-- 🌊 **Streaming Support** - Handle large result sets efficiently with batch streaming
-- ⚡ **High Performance** - Optimized connection handling and query execution for Vertica
-- 🛡️ **Type Safety** - Full TypeScript implementation with comprehensive error handling
-- 📋 **MCP Standard Compliance** - Built with official `@modelcontextprotocol/sdk` following MCP best practices
+By default, this server operates in **readonly mode** to ensure database safety in production environments. You can optionally enable write operations when needed.
 
-## Prerequisites
+## ✨ Key Features
 
-- Node.js 18.x or higher
-- Access to a Vertica database
-- Environment variables for database connection
+- **🔒 Configurable Safety**: Readonly by default, with optional write operations
+- **🏗️ Complete Schema Discovery**: Explore tables, views, and database structure
+- **📊 Flexible Query Execution**: Run SQL queries with parameter support
+- **🌊 Efficient Streaming**: Handle large datasets with batch processing
+- **⚡ High Performance**: Optimized for Vertica's columnar architecture
+- **🛡️ Enterprise Ready**: SSL support, connection pooling, and error handling
 
-## Installation & Usage
+## 🚀 Quick Start
 
-### Quick Start with Cursor (Recommended)
+### For Cursor Users
 
-The easiest way to use this MCP server with Cursor is to configure it in your MCP settings:
-
-1. **Create an environment file** (e.g., `~/.cursor/vertica.env`):
+1. **Create environment file** (`~/.cursor/vertica.env`):
 ```env
-# Required: Vertica Database Connection
 VERTICA_HOST=your-vertica-host.com
 VERTICA_PORT=5433
 VERTICA_DATABASE=your_database
 VERTICA_USER=your_username
 VERTICA_PASSWORD=your_password
-
-# Optional: Default Schema
-VERTICA_DEFAULT_SCHEMA=public
-
-# Optional: Connection Settings
-VERTICA_CONNECTION_LIMIT=10
-VERTICA_QUERY_TIMEOUT=60000
-
-# Optional: SSL Settings
-VERTICA_SSL=false
-VERTICA_SSL_REJECT_UNAUTHORIZED=true
 ```
 
-2. **Configure Cursor MCP** (`~/.cursor/mcp.json`):
+2. **Configure Cursor** (`~/.cursor/mcp.json`):
 ```json
 {
   "mcpServers": {
     "vertica-mcp": {
       "command": "npx",
       "args": [
-        "@hechtcarmel/vertica-mcp@1.2.2",
+        "@hechtcarmel/vertica-mcp@1.3.0",
         "--env-file",
         "/Users/yourusername/.cursor/vertica.env"
       ]
@@ -62,11 +44,11 @@ VERTICA_SSL_REJECT_UNAUTHORIZED=true
 }
 ```
 
-3. **Restart Cursor** and start querying your Vertica database!
+3. **Restart Cursor** and start querying your database!
 
-### Claude Desktop Configuration
+### For Claude Desktop
 
-Add the following to your Claude Desktop configuration file:
+Add to your Claude configuration file:
 
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
@@ -77,359 +59,179 @@ Add the following to your Claude Desktop configuration file:
     "vertica-mcp": {
       "command": "npx",
       "args": [
-        "@hechtcarmel/vertica-mcp@1.2.2",
+        "@hechtcarmel/vertica-mcp@1.3.0",
         "--env-file",
-        "/path/to/your/vertica.env"
+        "/path/to/your/.env"
       ]
     }
   }
 }
 ```
 
-### Direct Usage
+## ⚙️ Configuration
 
-```bash
-# Run with custom environment file
-npx @hechtcarmel/vertica-mcp@1.2.2 --env-file /path/to/your/.env
-
-# Run with environment variables in current directory (.env file)
-npx @hechtcarmel/vertica-mcp@1.2.2
-
-# Show help
-npx @hechtcarmel/vertica-mcp@1.2.2 --help
-
-# Show version
-npx @hechtcarmel/vertica-mcp@1.2.2 --version
-```
-
-## Environment Configuration
-
-Create a `.env` file with your Vertica connection details:
+Create a `.env` file with your database connection details:
 
 ```env
-# Required: Vertica Database Connection
+# Required: Database Connection
 VERTICA_HOST=localhost
 VERTICA_PORT=5433
 VERTICA_DATABASE=VMart
 VERTICA_USER=dbadmin
 VERTICA_PASSWORD=your_password
 
-# Optional: Connection Pool Settings
-VERTICA_CONNECTION_LIMIT=10
-VERTICA_QUERY_TIMEOUT=60000
+# Optional: Safety Settings
+VERTICA_READONLY_MODE=true          # Default: true (readonly only)
 
-# Optional: SSL Settings
-VERTICA_SSL=false
-VERTICA_SSL_REJECT_UNAUTHORIZED=true
+# Optional: Performance Settings
+VERTICA_CONNECTION_LIMIT=10         # Default: 10
+VERTICA_QUERY_TIMEOUT=60000         # Default: 60 seconds
+
+# Optional: Security Settings
+VERTICA_SSL=false                   # Default: false
+VERTICA_SSL_REJECT_UNAUTHORIZED=true # Default: true
 
 # Optional: Default Schema
-VERTICA_DEFAULT_SCHEMA=public
+VERTICA_DEFAULT_SCHEMA=public       # Default: public
 ```
 
-## Available Tools
+### Safety Configuration
 
-### 1. execute_query
+- **Readonly Mode (Default)**: Only `SELECT`, `SHOW`, `DESCRIBE`, `EXPLAIN`, and `WITH` queries are allowed
+- **Write Mode**: Set `VERTICA_READONLY_MODE=false` to enable all SQL operations (INSERT, UPDATE, DELETE, CREATE, DROP, etc.)
 
-Execute readonly SQL queries against the Vertica database.
+## 🔧 Available Operations
 
-**Parameters:**
-- `sql` (string, required): SQL query to execute
-- `params` (array, optional): Parameters for parameterized queries
+### Query Execution
+- **execute_query**: Run SQL queries with optional parameters
+- **stream_query**: Handle large result sets with efficient batching
 
-**Example:**
+### Schema Discovery
+- **get_table_structure**: Detailed table information with columns and constraints
+- **list_tables**: All tables in a schema with metadata
+- **list_views**: All views with definitions
+- **list_indexes**: Vertica projections (indexes) for query optimization
+
+## 💡 Usage Examples
+
+### Basic Data Analysis
 ```sql
-SELECT customer_key, customer_name, customer_state 
-FROM public.customer_dimension 
-WHERE customer_state = ? 
-LIMIT 10
+-- Customer analysis
+SELECT customer_state, COUNT(*) as customer_count 
+FROM customer_dimension 
+GROUP BY customer_state 
+ORDER BY customer_count DESC 
+LIMIT 10;
+
+-- Sales trends
+SELECT DATE_TRUNC('month', sale_date_key) as month,
+       SUM(sales_quantity) as total_sales
+FROM store_sales_fact 
+WHERE sale_date_key >= '2023-01-01'
+GROUP BY month
+ORDER BY month;
 ```
 
-### 2. stream_query
-
-Stream large query results in manageable batches.
-
-**Parameters:**
-- `sql` (string, required): SQL query to execute
-- `batchSize` (number, optional): Rows per batch (default: 1000, max: 10000)
-- `maxRows` (number, optional): Maximum total rows to fetch (max: 1000000)
-
-**Example:**
+### Schema Exploration
 ```sql
-SELECT * FROM public.store_sales_fact ORDER BY sale_date_key
+-- Show all tables
+SHOW TABLES;
+
+-- Describe table structure
+DESCRIBE customer_dimension;
+
+-- Query performance analysis
+EXPLAIN SELECT * FROM store_sales_fact WHERE sale_date_key > '2023-01-01';
 ```
 
-### 3. get_table_structure
+### Large Dataset Handling
+Use `stream_query` for large datasets:
+- Automatically batches results (default: 1000 rows per batch)
+- Configurable batch size and row limits
+- Memory-efficient processing
 
-Get detailed structure information for a specific table.
+## 🔐 Security Features
 
-**Parameters:**
-- `tableName` (string, required): Name of the table to analyze
-- `schemaName` (string, optional): Schema name (defaults to configured schema)
+### Readonly Protection
+- **SQL Validation**: Only approved query types are executed
+- **Parameter Binding**: Protection against SQL injection
+- **Connection Limits**: Prevent resource exhaustion
 
-### 4. list_tables
+### Production Safety
+- **Error Handling**: Graceful failure with detailed logging
+- **Connection Cleanup**: Automatic resource management
+- **SSL Support**: Encrypted connections to your database
 
-List all tables in a schema with metadata.
+## 🏢 Enterprise Features
 
-**Parameters:**
-- `schemaName` (string, optional): Schema name (defaults to configured schema)
+### Vertica Optimizations
+- **Projection Awareness**: Leverage Vertica's columnar projections
+- **Batch Processing**: Efficient handling of large analytical queries
+- **Connection Pooling**: Optimized connection management
 
-### 5. list_views
+### Performance
+- **Query Timeouts**: Configurable timeout settings
+- **Streaming Results**: Handle million-row datasets efficiently
+- **Smart Batching**: Automatic optimization for large queries
 
-List all views in a schema with their definitions.
+## 📊 Use Cases
 
-**Parameters:**
-- `schemaName` (string, optional): Schema name (defaults to configured schema)
+### Data Analysis
+- Explore customer behavior patterns
+- Analyze sales trends and performance
+- Generate business intelligence reports
 
-### 6. list_indexes
+### Schema Management
+- Document database structure
+- Understand table relationships
+- Optimize query performance
 
-List indexes (projections) for a specific table.
+### AI-Assisted Development
+- Generate SQL queries through natural language
+- Validate data models and constraints
+- Prototype and test analytical queries
 
-**Parameters:**
-- `tableName` (string, required): Name of the table
-- `schemaName` (string, optional): Schema name (defaults to configured schema)
+## 🚨 Troubleshooting
 
-**Note:** In Vertica, indexes are implemented as projections, which provide similar functionality for query optimization.
-
-## Vertica-Specific Features
-
-### Projections as Indexes
-
-Vertica uses projections instead of traditional indexes. The `list_indexes` tool provides information about projections that serve similar purposes to indexes in other databases.
-
-### System Catalogs
-
-The server leverages Vertica's system catalogs (`v_catalog.*`) for metadata discovery:
-- `v_catalog.tables` - Table information
-- `v_catalog.columns` - Column details
-- `v_catalog.views` - View definitions
-- `v_catalog.projections` - Projection information
-
-### Query Optimization
-
-- Efficient connection handling with proper cleanup
-- Implements query timeouts to prevent long-running operations
-- Supports batch processing for large result sets
-- Leverages Vertica's columnar storage advantages
-
-## Security & Safety
-
-### Readonly Enforcement
-
-The server enforces readonly operations by validating that all queries start with approved keywords:
-- `SELECT` - Data retrieval
-- `SHOW` - Metadata display
-- `DESCRIBE` - Structure information
-- `EXPLAIN` - Query plan analysis
-- `WITH` - Common table expressions
-
-### Input Validation
-
-- All inputs are validated using Zod schemas
-- SQL injection protection through parameterized queries
-- Connection limits and timeouts prevent resource exhaustion
-- Comprehensive error handling with detailed logging
-
-### Connection Security
-
-- Supports SSL/TLS connections to Vertica
-- Automatic connection cleanup and timeout handling
-- Password masking in logs for security
-
-## Development
-
-### Project Structure
-
-```
-vertica-mcp/
-├── src/
-│   ├── config/          # Configuration management
-│   ├── constants/       # Application constants
-│   ├── services/        # Database service layer
-│   ├── tools/           # MCP tool implementations
-│   ├── types/           # TypeScript type definitions
-│   ├── utils/           # Utility functions and helpers
-│   └── index.ts         # Main server entry point
-├── dist/                # Compiled output
-├── package.json         # Dependencies and scripts
-├── tsconfig.json        # TypeScript configuration
-└── README.md           # This file
-```
-
-### Code Architecture
-
-This project follows modern TypeScript best practices and clean architecture principles:
-
-#### **Official MCP SDK Integration**
-- All tools implement the `MCPTool` interface using the official `@modelcontextprotocol/sdk`
-- Uses standard JSON Schema format for tool input validation
-- Implements proper MCP protocol message handling and tool registration
-- Full compatibility with npx execution and all MCP clients
-
-#### **Utility Modules**
-- `response-formatter.ts`: Standardized API response formatting
-- `table-helpers.ts`: Reusable table and schema operations
-- Constants are centralized to eliminate magic numbers/strings
-
-#### **Error Handling**
-- Structured error types with detailed context
-- Consistent error responses across all tools
-- Proper TypeScript error typing
-- Graceful service cleanup in finally blocks
-
-### Building from Source
-
+### Connection Issues
 ```bash
-# Clone the repository
-git clone https://github.com/hechtcarmel/vertica-mcp.git
-cd vertica-mcp
-
-# Install dependencies
-npm install
-
-# Build the project
-npm run build
-
-# Start the server
-npm start
-
-# Development with watch mode
-npm run dev
-
-# Type checking only
-npm run typecheck
-
-# Test connection with local settings
-npm run test:connection
+# Test database connectivity
+vsql -h localhost -p 5433 -d VMart -U dbadmin
 ```
 
-## Troubleshooting
+### Permission Problems
+- Ensure database user has SELECT permissions
+- Check access to system catalogs (`v_catalog.*`)
+- Verify network connectivity to Vertica host
 
-### Common Issues
+### Performance Issues
+- Increase `VERTICA_QUERY_TIMEOUT` for complex queries
+- Use `stream_query` for large result sets
+- Optimize batch sizes based on available memory
 
-#### Connection Issues
+## 📈 Version History
 
-1. **Verify database connectivity:**
-   ```bash
-   # Test connection manually
-   vsql -h localhost -p 5433 -d VMart -U dbadmin
-   ```
+### v1.3.0 (Latest)
+- **🆕 Configurable Readonly Mode**: Enable/disable write operations
+- **📝 Enhanced Documentation**: Professional user-focused guide
+- **🔧 Improved Error Messages**: Clear guidance for configuration issues
 
-2. **Check environment variables:**
-   - Ensure all required variables are set
-   - Verify credentials are correct
-   - Check network connectivity to Vertica host
+### v1.2.x
+- Stable readonly operations
+- Comprehensive tool set
+- Production-ready reliability
 
-3. **SSL Configuration:**
-   - If using SSL, ensure certificates are properly configured
-   - Try disabling SSL for testing: `VERTICA_SSL=false`
+## 🆘 Support
 
-#### Permission Issues
+For issues and questions:
+- **GitHub Issues**: [Report problems](https://github.com/hechtcarmel/vertica-mcp/issues)
+- **Documentation**: This README covers most common scenarios
+- **Community**: Share usage patterns and best practices
 
-- Ensure the database user has SELECT permissions on target schemas
-- Check that the user can access system catalogs (`v_catalog.*`)
-
-#### Query Performance
-
-1. **Query Timeouts:**
-   - Increase `VERTICA_QUERY_TIMEOUT` for complex queries
-   - Use `stream_query` for large result sets
-
-2. **Batch Size Tuning:**
-   - Adjust `batchSize` in `stream_query` based on memory constraints
-   - Monitor network latency and adjust accordingly
-
-### Version Updates
-
-```bash
-# Update to latest version
-npx @hechtcarmel/vertica-mcp@latest
-
-# Check your current version
-npx @hechtcarmel/vertica-mcp --version
-
-# Clear npm cache if needed
-npm cache clean --force
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/new-feature`
-3. Make your changes following the existing code style and architecture
-4. Run code quality checks: `npm run check`
-5. Test thoroughly with a real Vertica database
-6. Submit a pull request with a clear description
-
-### Development Guidelines
-
-When contributing to this project, please follow these guidelines:
-
-- **Follow MCP patterns**: All new tools should implement `MCPTool` interface
-- **Use proper schemas**: Define schemas with `type` and `description` properties
-- **Add constants**: Put magic numbers/strings in `src/constants/index.ts`
-- **Create utilities**: Extract reusable logic into `src/utils/` modules
-- **Type everything**: Use TypeScript types extensively
-- **Validate inputs**: Use Zod schemas for input validation
-- **Handle errors properly**: Use structured error types and proper cleanup
-- **Test with npx**: Always test tools work correctly when run via `npx`
-
-## Changelog
-
-### v1.2.2 (Current)
-- **🔧 Enhanced**: Improved connection handling and error management
-- **📦 Updated**: Latest dependencies and security patches
-- **🏗️ Stable**: Production-ready release with comprehensive testing
-
-### v1.1.0
-- **🚀 Major**: Migrated to official MCP SDK (`@modelcontextprotocol/sdk`)
-- **🔧 Enhanced**: All tools now use proper JSON Schema validation with Zod
-- **📦 Improved**: Better error handling and type safety throughout
-- **⚡ Performance**: Improved protocol compliance and message handling
-
-### v1.0.9
-- **🔧 Fixed**: MCP framework compatibility issues
-- **🔧 Fixed**: NPX execution now works correctly with all MCP clients
-- **♻️ Refactored**: Improved tool architecture and error handling
-
-## License
+## 📄 License
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## Support
-
-For issues and questions:
-1. Check the troubleshooting section above
-2. Review Vertica documentation for database-specific issues
-3. Open an issue on the [GitHub repository](https://github.com/hechtcarmel/vertica-mcp/issues)
-
-## Quick Examples
-
-### Cursor Configuration Example
-```json
-{
-  "mcpServers": {
-    "vertica-mcp": {
-      "command": "npx",
-      "args": [
-        "@hechtcarmel/vertica-mcp@1.2.2",
-        "--env-file",
-        "/Users/yourusername/.cursor/vertica.env"
-      ]
-    }
-  }
-}
-```
-
-### Environment File Example
-```env
-VERTICA_HOST=your-vertica-host.com
-VERTICA_PORT=5433
-VERTICA_DATABASE=your_database
-VERTICA_USER=your_username
-VERTICA_PASSWORD=your_password
-VERTICA_DEFAULT_SCHEMA=public
-```
-
 ---
 
-**Note:** This server provides readonly access only. It cannot modify data, structure, or permissions in your Vertica database, ensuring safety for production environments. 
+**Ready to get started?** Copy the configuration examples above and start exploring your Vertica database with AI assistance! 

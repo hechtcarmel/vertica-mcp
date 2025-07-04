@@ -89,7 +89,7 @@ describe("ExecuteQueryTool", () => {
     });
 
     it("should have description", () => {
-      expect(tool.description).toContain("readonly SQL query");
+      expect(tool.description).toContain("readonly SQL queries");
     });
 
     it("should have valid input schema", () => {
