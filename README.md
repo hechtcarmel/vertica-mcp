@@ -217,9 +217,6 @@ vsql -h localhost -p 5433 -d VMart -U dbadmin
 - **🔧 Improved Error Messages**: Clear guidance for configuration issues
 - **🐛 Fixed**: Corrected v1.3.1 publishing issue
 
-### v1.3.1 (Deprecated)
-- Incorrectly published version with breaking changes
-
 ### v1.3.0
 - Initial release with configurable readonly mode
 
