@@ -86,7 +86,7 @@ import GetTableStructureTool from "./tools/get-table-structure.js";
 const server = new Server(
   {
     name: "@hechtcarmel/vertica-mcp",
-    version: "1.3.2",
+    version: "1.3.3",
   },
   {
     capabilities: {
