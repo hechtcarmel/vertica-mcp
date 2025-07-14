@@ -1,4 +1,5 @@
 # Vertica MCP Server
+[![smithery badge](https://smithery.ai/badge/@hechtcarmel/vertica-mcp)](https://smithery.ai/server/@hechtcarmel/vertica-mcp)
 
 A Model Context Protocol (MCP) server that enables AI assistants like Claude and Cursor to interact with Vertica databases safely and efficiently.
 
@@ -35,7 +36,7 @@ VERTICA_PASSWORD=your_password
     "vertica-mcp": {
       "command": "npx",
       "args": [
-        "@hechtcarmel/vertica-mcp@1.3.4",
+        "@hechtcarmel/vertica-mcp@1.3.2",
         "--env-file",
         "/Users/yourusername/.cursor/vertica.env"
       ]
@@ -59,7 +60,7 @@ Add to your Claude configuration file:
     "vertica-mcp": {
       "command": "npx",
       "args": [
-        "@hechtcarmel/vertica-mcp@1.3.4",
+        "@hechtcarmel/vertica-mcp@1.3.2",
         "--env-file",
         "/path/to/your/.env"
       ]
@@ -211,7 +212,7 @@ vsql -h localhost -p 5433 -d VMart -U dbadmin
 
 ## 📈 Version History
 
-### v1.3.4 (Latest)
+### v1.3.2 (Latest)
 - **🆕 Configurable Readonly Mode**: Enable/disable write operations
 - **📝 Enhanced Documentation**: Professional user-focused guide
 - **🔧 Improved Error Messages**: Clear guidance for configuration issues
