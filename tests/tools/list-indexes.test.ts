@@ -10,6 +10,8 @@ import ListIndexesTool from "../../src/tools/list-indexes.js";
 import { VerticaService } from "../../src/services/vertica-service.js";
 import { getDatabaseConfig } from "../../src/config/database.js";
 import type { IndexInfo } from "../../src/types/vertica.js";
+import { logger } from "../../src/utils/logger";
+import { LOG_MESSAGES } from "../../src/constants/index.js";
 
 // Mock modules
 jest.mock("../../src/services/vertica-service.js");
@@ -331,17 +333,17 @@ describe("ListIndexesTool", () => {
         new Error("Cleanup failed")
       );
 
-      const consoleSpy = jest.spyOn(console, "warn").mockImplementation();
+      const warnSpy = jest.spyOn(logger, "warn").mockImplementation(() => {});
 
       const result = await tool.execute({ tableName: "test_table" });
       const parsed = JSON.parse(result);
 
       expect(parsed.success).toBe(true);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Warning during service cleanup:",
+      expect(warnSpy).toHaveBeenCalledWith(
+        LOG_MESSAGES.SERVICE_CLEANUP_WARNING,
         expect.any(Error)
       );
-      consoleSpy.mockRestore();
+      warnSpy.mockRestore();
     });
   });
 

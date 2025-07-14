@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import dotenv from "dotenv";
+import { logger } from "./utils/logger";
 
 // Parse command line arguments
 const { values } = parseArgs({
@@ -56,10 +57,10 @@ const envFile = values["env-file"];
 if (envFile) {
   const envPath = resolve(envFile);
   if (!existsSync(envPath)) {
-    console.error(`Error: Environment file not found: ${envPath}`);
+    logger.error(`Error: Environment file not found: ${envPath}`);
     process.exit(1);
   }
-  console.error(`Loading environment from: ${envPath}`);
+  logger.info(`Loading environment from: ${envPath}`);
   dotenv.config({ path: envPath });
 } else {
   // Load default .env file if it exists
@@ -160,10 +161,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Vertica MCP Server running on stdio");
+  logger.info("Vertica MCP Server running on stdio");
 }
 
 main().catch((error) => {
-  console.error("Fatal error in main():", error);
+  logger.error("Fatal error in main():", error);
   process.exit(1);
 });

@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { MCPTool } from "../types/tool.js";
 import { VerticaService } from "../services/vertica-service.js";
 import { getDatabaseConfig } from "../config/database.js";
+import { LOG_MESSAGES } from "../constants/index.js";
+import { logger } from "../utils/logger";
 
 interface ListViewsInput {
   schemaName?: string;
@@ -75,7 +77,7 @@ export default class ListViewsTool implements MCPTool {
         try {
           await verticaService.disconnect();
         } catch (error) {
-          console.warn("Warning during service cleanup:", error);
+          logger.warn(LOG_MESSAGES.SERVICE_CLEANUP_WARNING, error);
         }
       }
     }

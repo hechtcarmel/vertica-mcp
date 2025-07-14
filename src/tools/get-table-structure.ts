@@ -7,6 +7,8 @@ import {
   validateTableName,
   validateSchemaName,
 } from "../utils/table-helpers.js";
+import { LOG_MESSAGES } from "../constants/index.js";
+import { logger } from "../utils/logger";
 
 interface GetTableStructureInput {
   tableName: string;
@@ -86,7 +88,7 @@ export default class GetTableStructureTool implements MCPTool {
         try {
           await service.disconnect();
         } catch (error) {
-          console.warn("Warning during service cleanup:", error);
+          logger.warn(LOG_MESSAGES.SERVICE_CLEANUP_WARNING, error);
         }
       }
     }

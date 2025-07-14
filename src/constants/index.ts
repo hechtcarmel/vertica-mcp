@@ -40,4 +40,5 @@ export const LOG_MESSAGES = {
   DB_CONNECTION_FAILED: "❌ Failed to connect to Vertica",
   SERVER_START_FAILED: "❌ Failed to start Vertica MCP Server:",
   UNHANDLED_ERROR: "❌ Unhandled error in main:",
+  SERVICE_CLEANUP_WARNING: "⚠️ Warning during service cleanup:",
 } as const;

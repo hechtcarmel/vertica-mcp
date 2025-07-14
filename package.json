@@ -55,6 +55,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.3",
     "dotenv": "^16.3.1",
+    "pino": "^9.7.0",
     "vertica-nodejs": "^1.1.4",
     "zod": "^3.22.4"
   },
