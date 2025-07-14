@@ -10,8 +10,6 @@ import ListViewsTool from "../../src/tools/list-views.js";
 import { VerticaService } from "../../src/services/vertica-service.js";
 import { getDatabaseConfig } from "../../src/config/database.js";
 import type { ViewInfo } from "../../src/types/vertica.js";
-import { logger } from "../../src/utils/logger";
-import { LOG_MESSAGES } from "../../src/constants/index.js";
 
 // Mock modules
 jest.mock("../../src/services/vertica-service.js");
@@ -309,17 +307,17 @@ describe("ListViewsTool", () => {
         new Error("Cleanup failed")
       );
 
-      const warnSpy = jest.spyOn(logger, "warn").mockImplementation(() => {});
+      const consoleSpy = jest.spyOn(console, "warn").mockImplementation();
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
 
       expect(parsed.success).toBe(true);
-      expect(warnSpy).toHaveBeenCalledWith(
-        LOG_MESSAGES.SERVICE_CLEANUP_WARNING,
+      expect(consoleSpy).toHaveBeenCalledWith(
+        "Warning during service cleanup:",
         expect.any(Error)
       );
-      warnSpy.mockRestore();
+      consoleSpy.mockRestore();
     });
   });
 

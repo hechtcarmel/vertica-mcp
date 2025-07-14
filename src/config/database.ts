@@ -1,7 +1,6 @@
 import { z } from "zod";
 import type { VerticaConfig } from "../types/vertica.js";
 import { DATABASE_CONSTANTS } from "../constants/index.js";
-import { logger } from "../utils/logger";
 
 // Custom boolean transform that handles string values correctly
 const booleanFromString = z
@@ -73,7 +72,7 @@ export function loadDatabaseConfig(): VerticaConfig {
       ...validatedConfig,
       password: validatedConfig.password ? "***" : undefined,
     };
-    logger.info("Database configuration loaded", logConfig);
+    console.log("Database configuration loaded:", logConfig);
 
     return validatedConfig;
   } catch (error) {

@@ -8,8 +8,6 @@ import {
 } from "@jest/globals";
 import { VerticaService } from "../../src/services/vertica-service.js";
 import type { VerticaConfig } from "../../src/types/vertica.js";
-import { logger } from "../../src/utils/logger";
-import { LOG_MESSAGES } from "../../src/constants/index.js";
 
 // Mock the vertica-nodejs module
 const mockClient = {
@@ -637,16 +635,13 @@ describe("VerticaService", () => {
       const disconnectError = new Error("Disconnect failed");
       mockClient.end.mockRejectedValue(disconnectError);
 
-      const warnSpy = jest.spyOn(logger, "warn").mockImplementation(() => {});
+      const consoleSpy = jest.spyOn(console, "warn").mockImplementation();
 
       await service.disconnect();
 
       expect(service.isConnected()).toBe(false);
-      expect(warnSpy).toHaveBeenCalledWith(
-        LOG_MESSAGES.DB_CONNECTION_WARNING,
-        expect.any(Error)
-      );
-      warnSpy.mockRestore();
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
     });
 
     it("should handle non-Error objects in error scenarios", async () => {

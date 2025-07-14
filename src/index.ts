@@ -4,7 +4,6 @@ import { parseArgs } from "node:util";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import dotenv from "dotenv";
-import { logger } from "./utils/logger";
 
 // Parse command line arguments
 const { values } = parseArgs({
@@ -57,10 +56,10 @@ const envFile = values["env-file"];
 if (envFile) {
   const envPath = resolve(envFile);
   if (!existsSync(envPath)) {
-    logger.error(`Error: Environment file not found: ${envPath}`);
+    console.error(`Error: Environment file not found: ${envPath}`);
     process.exit(1);
   }
-  logger.info(`Loading environment from: ${envPath}`);
+  console.error(`Loading environment from: ${envPath}`);
   dotenv.config({ path: envPath });
 } else {
   // Load default .env file if it exists
@@ -86,7 +85,7 @@ import GetTableStructureTool from "./tools/get-table-structure.js";
 const server = new Server(
   {
     name: "@hechtcarmel/vertica-mcp",
-    version: "1.3.3",
+    version: "1.3.2",
   },
   {
     capabilities: {
@@ -161,10 +160,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  logger.info("Vertica MCP Server running on stdio");
+  console.error("Vertica MCP Server running on stdio");
 }
 
 main().catch((error) => {
-  logger.error("Fatal error in main():", error);
+  console.error("Fatal error in main():", error);
   process.exit(1);
 });

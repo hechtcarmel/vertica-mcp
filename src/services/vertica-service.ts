@@ -16,7 +16,6 @@ import {
   determineTableType,
   resolveSchemaName,
 } from "../utils/table-helpers.js";
-import { logger } from "../utils/logger";
 
 type Connection = any;
 
@@ -78,12 +77,9 @@ export class VerticaService {
       await client.connect();
       this.connection = client;
 
-      logger.info({
-        msg: LOG_MESSAGES.DB_CONNECTED,
-        host: this.config.host,
-        port: this.config.port,
-        database: this.config.database,
-      });
+      console.log(
+        `${LOG_MESSAGES.DB_CONNECTED}: ${this.config.host}:${this.config.port}/${this.config.database}`
+      );
     } catch (error) {
       throw new Error(
         `Failed to connect to Vertica: ${
@@ -100,9 +96,12 @@ export class VerticaService {
     if (this.connection) {
       try {
         await this.connection.end();
-        logger.info({ msg: LOG_MESSAGES.DB_DISCONNECTED });
+        console.log(LOG_MESSAGES.DB_DISCONNECTED);
       } catch (error) {
-        logger.warn(LOG_MESSAGES.DB_CONNECTION_WARNING, error);
+        console.warn(
+          LOG_MESSAGES.DB_CONNECTION_WARNING,
+          error instanceof Error ? error.message : String(error)
+        );
       } finally {
         this.connection = null;
       }
