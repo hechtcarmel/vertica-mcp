@@ -1,0 +1,81 @@
+# Smithery configuration file: https://smithery.ai/docs/build/project-config
+
+startCommand:
+  type: stdio
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |-
+    (config) => ({ command: 'node', args: ['dist/index.js'], env: {
+      VERTICA_HOST: config.verticaHost,
+      VERTICA_PORT: String(config.verticaPort),
+      VERTICA_DATABASE: config.verticaDatabase,
+      VERTICA_USER: config.verticaUser,
+      VERTICA_PASSWORD: config.verticaPassword,
+      VERTICA_READONLY_MODE: config.readonlyMode ? 'true' : 'false',
+      VERTICA_CONNECTION_LIMIT: String(config.connectionLimit),
+      VERTICA_QUERY_TIMEOUT: String(config.queryTimeout),
+      VERTICA_SSL: config.ssl ? 'true' : 'false',
+      VERTICA_SSL_REJECT_UNAUTHORIZED: config.sslRejectUnauthorized ? 'true' : 'false',
+      VERTICA_DEFAULT_SCHEMA: config.defaultSchema,
+    }})
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - verticaHost
+      - verticaPort
+      - verticaDatabase
+      - verticaUser
+      - verticaPassword
+    properties:
+      verticaHost:
+        type: string
+        description: Vertica database host
+      verticaPort:
+        type: number
+        description: Vertica database port
+      verticaDatabase:
+        type: string
+        description: Vertica database name
+      verticaUser:
+        type: string
+        description: Vertica database user
+      verticaPassword:
+        type: string
+        description: Vertica database password
+      readonlyMode:
+        type: boolean
+        default: true
+        description: Enable readonly mode
+      connectionLimit:
+        type: number
+        default: 10
+        description: Connection pool limit
+      queryTimeout:
+        type: number
+        default: 60000
+        description: Query timeout in milliseconds
+      ssl:
+        type: boolean
+        default: false
+        description: Enable SSL
+      sslRejectUnauthorized:
+        type: boolean
+        default: true
+        description: Reject unauthorized SSL certificates
+      defaultSchema:
+        type: string
+        default: public
+        description: Default schema
+  exampleConfig:
+    verticaHost: localhost
+    verticaPort: 5433
+    verticaDatabase: mydb
+    verticaUser: dbadmin
+    verticaPassword: mypassword
+    readonlyMode: true
+    connectionLimit: 10
+    queryTimeout: 60000
+    ssl: false
+    sslRejectUnauthorized: true
+    defaultSchema: public
