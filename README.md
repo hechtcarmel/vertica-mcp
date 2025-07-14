@@ -35,7 +35,7 @@ VERTICA_PASSWORD=your_password
     "vertica-mcp": {
       "command": "npx",
       "args": [
-        "@hechtcarmel/vertica-mcp@1.3.2",
+        "@hechtcarmel/vertica-mcp@1.3.4",
         "--env-file",
         "/Users/yourusername/.cursor/vertica.env"
       ]
@@ -59,7 +59,7 @@ Add to your Claude configuration file:
     "vertica-mcp": {
       "command": "npx",
       "args": [
-        "@hechtcarmel/vertica-mcp@1.3.2",
+        "@hechtcarmel/vertica-mcp@1.3.4",
         "--env-file",
         "/path/to/your/.env"
       ]
@@ -211,7 +211,7 @@ vsql -h localhost -p 5433 -d VMart -U dbadmin
 
 ## 📈 Version History
 
-### v1.3.2 (Latest)
+### v1.3.4 (Latest)
 - **🆕 Configurable Readonly Mode**: Enable/disable write operations
 - **📝 Enhanced Documentation**: Professional user-focused guide
 - **🔧 Improved Error Messages**: Clear guidance for configuration issues
