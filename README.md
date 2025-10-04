@@ -1,5 +1,9 @@
 # Vertica MCP Server
 
+## Acknowledgments
+
+This project's architecture and tool design are based on [mcp-vertica](https://github.com/nolleh/mcp-vertica) by [@nolleh](https://github.com/nolleh).
+
 A Model Context Protocol (MCP) server that enables AI assistants like Claude and Cursor to interact with Vertica databases safely and efficiently.
 
 ## 🔒 Safety First
