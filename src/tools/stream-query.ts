@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { MCPTool } from "../types/tool.js";
 import { VerticaService } from "../services/vertica-service.js";
 import { getDatabaseConfig } from "../config/database.js";
+import { safeJsonStringify } from "../utils/response-formatter.js";
 
 interface StreamQueryInput {
   sql: string;
@@ -125,7 +126,7 @@ export default class StreamQueryTool implements MCPTool {
         }
       }
 
-      return JSON.stringify(
+      return safeJsonStringify(
         {
           success: true,
           query: parsed.sql,
@@ -135,21 +136,19 @@ export default class StreamQueryTool implements MCPTool {
           batches,
           executedAt: new Date().toISOString(),
         },
-        null,
         2
       );
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
-      return JSON.stringify(
+      return safeJsonStringify(
         {
           success: false,
           error: errorMessage,
           query: parsed.sql,
           executedAt: new Date().toISOString(),
         },
-        null,
         2
       );
     } finally {
@@ -157,7 +156,7 @@ export default class StreamQueryTool implements MCPTool {
         try {
           await verticaService.disconnect();
         } catch (error) {
-          console.warn("Warning during service cleanup:", error);
+          console.error("Warning during service cleanup:", error instanceof Error ? error.message : String(error));
         }
       }
     }

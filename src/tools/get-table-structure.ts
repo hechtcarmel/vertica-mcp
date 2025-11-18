@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { MCPTool } from "../types/tool.js";
 import { VerticaService } from "../services/vertica-service.js";
 import { getDatabaseConfig } from "../config/database.js";
-import { formatTableStructure } from "../utils/response-formatter.js";
+import { formatTableStructure, safeJsonStringify } from "../utils/response-formatter.js";
 import {
   validateTableName,
   validateSchemaName,
@@ -57,20 +57,19 @@ export default class GetTableStructureTool implements MCPTool {
 
       const formatted = formatTableStructure(structure);
 
-      return JSON.stringify(
+      return safeJsonStringify(
         {
           success: true,
           ...formatted,
           queriedAt: new Date().toISOString(),
         },
-        null,
         2
       );
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
-      return JSON.stringify(
+      return safeJsonStringify(
         {
           success: false,
           error: errorMessage,
@@ -78,7 +77,6 @@ export default class GetTableStructureTool implements MCPTool {
           schemaName: parsed.schemaName,
           queriedAt: new Date().toISOString(),
         },
-        null,
         2
       );
     } finally {
@@ -86,7 +84,7 @@ export default class GetTableStructureTool implements MCPTool {
         try {
           await service.disconnect();
         } catch (error) {
-          console.warn("Warning during service cleanup:", error);
+          console.error("Warning during service cleanup:", error instanceof Error ? error.message : String(error));
         }
       }
     }

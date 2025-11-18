@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { MCPTool } from "../types/tool.js";
 import { VerticaService } from "../services/vertica-service.js";
 import { getDatabaseConfig } from "../config/database.js";
+import { safeJsonStringify } from "../utils/response-formatter.js";
 
 interface ListIndexesInput {
   tableName: string;
@@ -45,7 +46,7 @@ export default class ListIndexesTool implements MCPTool {
         parsed.schemaName
       );
 
-      return JSON.stringify(
+      return safeJsonStringify(
         {
           success: true,
           table: parsed.tableName,
@@ -61,14 +62,13 @@ export default class ListIndexesTool implements MCPTool {
           note: "In Vertica, indexes are implemented as projections which provide similar functionality",
           queriedAt: new Date().toISOString(),
         },
-        null,
         2
       );
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
-      return JSON.stringify(
+      return safeJsonStringify(
         {
           success: false,
           error: errorMessage,
@@ -76,7 +76,6 @@ export default class ListIndexesTool implements MCPTool {
           schemaName: parsed.schemaName,
           queriedAt: new Date().toISOString(),
         },
-        null,
         2
       );
     } finally {
@@ -84,7 +83,7 @@ export default class ListIndexesTool implements MCPTool {
         try {
           await verticaService.disconnect();
         } catch (error) {
-          console.warn("Warning during service cleanup:", error);
+          console.error("Warning during service cleanup:", error instanceof Error ? error.message : String(error));
         }
       }
     }

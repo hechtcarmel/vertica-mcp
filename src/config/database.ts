@@ -67,12 +67,14 @@ export function loadDatabaseConfig(): VerticaConfig {
   try {
     const validatedConfig = ConfigSchema.parse(rawConfig);
 
-    // Mask password in logs
-    const logConfig = {
-      ...validatedConfig,
-      password: validatedConfig.password ? "***" : undefined,
-    };
-    console.log("Database configuration loaded:", logConfig);
+    // Only log config details in debug mode
+    if (process.env.DEBUG === "true" || process.env.VERTICA_DEBUG === "true") {
+      const logConfig = {
+        ...validatedConfig,
+        password: validatedConfig.password ? "***" : undefined,
+      };
+      console.error("Database configuration loaded:", logConfig);
+    }
 
     return validatedConfig;
   } catch (error) {

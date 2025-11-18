@@ -5,6 +5,29 @@ import type { ApiResponse, BaseError } from "../types/errors.js";
  */
 
 /**
+ * Custom JSON replacer that handles BigInt and other special types
+ */
+function jsonReplacer(_key: string, value: unknown): unknown {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (Buffer.isBuffer(value)) {
+    return value.toString("base64");
+  }
+  return value;
+}
+
+/**
+ * Safe JSON stringify that handles BigInt, Date, Buffer, and other special types
+ */
+export function safeJsonStringify(data: unknown, space?: number): string {
+  return JSON.stringify(data, jsonReplacer, space);
+}
+
+/**
  * Create a successful response
  */
 export function createSuccessResponse<T>(data: T): string {

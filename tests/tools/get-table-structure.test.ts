@@ -285,7 +285,7 @@ describe("GetTableStructureTool", () => {
         new Error("Cleanup failed")
       );
 
-      const consoleSpy = jest.spyOn(console, "warn").mockImplementation();
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
 
       const result = await tool.execute({ tableName: "test_table" });
       const parsed = JSON.parse(result);
@@ -293,7 +293,7 @@ describe("GetTableStructureTool", () => {
       expect(parsed.success).toBe(true);
       expect(consoleSpy).toHaveBeenCalledWith(
         "Warning during service cleanup:",
-        expect.any(Error)
+        expect.any(String)
       );
       consoleSpy.mockRestore();
     });

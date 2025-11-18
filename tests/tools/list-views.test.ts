@@ -65,7 +65,7 @@ describe("ListViewsTool", () => {
         description:
           "Schema name (optional, defaults to configured default schema)",
       });
-      expect(tool.inputSchema.required).toEqual([]);
+      expect(tool.inputSchema.required).toBeUndefined();
     });
   });
 
@@ -307,7 +307,7 @@ describe("ListViewsTool", () => {
         new Error("Cleanup failed")
       );
 
-      const consoleSpy = jest.spyOn(console, "warn").mockImplementation();
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -315,7 +315,7 @@ describe("ListViewsTool", () => {
       expect(parsed.success).toBe(true);
       expect(consoleSpy).toHaveBeenCalledWith(
         "Warning during service cleanup:",
-        expect.any(Error)
+        expect.any(String)
       );
       consoleSpy.mockRestore();
     });

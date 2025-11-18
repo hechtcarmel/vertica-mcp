@@ -77,7 +77,7 @@ export class VerticaService {
       await client.connect();
       this.connection = client;
 
-      console.log(
+      console.error(
         `${LOG_MESSAGES.DB_CONNECTED}: ${this.config.host}:${this.config.port}/${this.config.database}`
       );
     } catch (error) {
@@ -96,9 +96,9 @@ export class VerticaService {
     if (this.connection) {
       try {
         await this.connection.end();
-        console.log(LOG_MESSAGES.DB_DISCONNECTED);
+        console.error(LOG_MESSAGES.DB_DISCONNECTED);
       } catch (error) {
-        console.warn(
+        console.error(
           LOG_MESSAGES.DB_CONNECTION_WARNING,
           error instanceof Error ? error.message : String(error)
         );
@@ -185,6 +185,15 @@ export class VerticaService {
     let offset = 0;
     let batchNumber = 0;
     let totalFetched = 0;
+
+    // Check if user SQL already contains LIMIT or OFFSET
+    const trimmedSql = sql.trim().toUpperCase();
+    if (trimmedSql.includes(" LIMIT ") || trimmedSql.includes(" OFFSET ")) {
+      throw new Error(
+        "Query should not contain LIMIT or OFFSET clauses when using streamQuery. " +
+        "Use the batchSize and maxRows parameters instead."
+      );
+    }
 
     try {
       while (true) {

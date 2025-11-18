@@ -635,7 +635,7 @@ describe("VerticaService", () => {
       const disconnectError = new Error("Disconnect failed");
       mockClient.end.mockRejectedValue(disconnectError);
 
-      const consoleSpy = jest.spyOn(console, "warn").mockImplementation();
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
 
       await service.disconnect();
 

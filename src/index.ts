@@ -2,8 +2,18 @@
 
 import { parseArgs } from "node:util";
 import { resolve } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import dotenv from "dotenv";
+
+// Read version from package.json
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(
+  readFileSync(join(__dirname, "..", "package.json"), "utf-8")
+);
+const VERSION = packageJson.version;
 
 // Parse command line arguments
 const { values } = parseArgs({
@@ -47,7 +57,7 @@ Examples:
 
 // Handle version flag
 if (values.version) {
-  console.log("1.3.5");
+  console.log(VERSION);
   process.exit(0);
 }
 
@@ -85,7 +95,7 @@ import GetTableStructureTool from "./tools/get-table-structure.js";
 const server = new Server(
   {
     name: "@hechtcarmel/vertica-mcp",
-    version: "1.3.5",
+    version: VERSION,
   },
   {
     capabilities: {
@@ -162,6 +172,26 @@ async function main() {
   await server.connect(transport);
   console.error("Vertica MCP Server running on stdio");
 }
+
+// Global error handlers for production stability
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  process.exit(1);
+});
+
+process.on("SIGTERM", () => {
+  console.error("Received SIGTERM, shutting down gracefully");
+  process.exit(0);
+});
+
+process.on("SIGINT", () => {
+  console.error("Received SIGINT, shutting down gracefully");
+  process.exit(0);
+});
 
 main().catch((error) => {
   console.error("Fatal error in main():", error);

@@ -2,6 +2,8 @@ import { z } from "zod";
 import type { MCPTool } from "../types/tool.js";
 import { VerticaService } from "../services/vertica-service.js";
 import { getDatabaseConfig } from "../config/database.js";
+import { safeJsonStringify } from "../utils/response-formatter.js";
+import { validateSchemaName } from "../utils/table-helpers.js";
 
 interface ListViewsInput {
   schemaName?: string;
@@ -21,7 +23,6 @@ export default class ListViewsTool implements MCPTool {
           "Schema name (optional, defaults to configured default schema)",
       },
     },
-    required: [],
   };
 
   async execute(input: Record<string, unknown>): Promise<string> {
@@ -30,6 +31,11 @@ export default class ListViewsTool implements MCPTool {
     let verticaService: VerticaService | null = null;
 
     try {
+      // Validate schema name if provided
+      if (parsed.schemaName) {
+        validateSchemaName(parsed.schemaName);
+      }
+
       // Create Vertica service instance
       const config = getDatabaseConfig();
       verticaService = new VerticaService(config);
@@ -37,7 +43,7 @@ export default class ListViewsTool implements MCPTool {
       // List views
       const views = await verticaService.listViews(parsed.schemaName);
 
-      return JSON.stringify(
+      return safeJsonStringify(
         {
           success: true,
           schema: parsed.schemaName || config.defaultSchema || "public",
@@ -53,21 +59,19 @@ export default class ListViewsTool implements MCPTool {
           })),
           queriedAt: new Date().toISOString(),
         },
-        null,
         2
       );
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
-      return JSON.stringify(
+      return safeJsonStringify(
         {
           success: false,
           error: errorMessage,
           schemaName: parsed.schemaName,
           queriedAt: new Date().toISOString(),
         },
-        null,
         2
       );
     } finally {
@@ -75,7 +79,7 @@ export default class ListViewsTool implements MCPTool {
         try {
           await verticaService.disconnect();
         } catch (error) {
-          console.warn("Warning during service cleanup:", error);
+          console.error("Warning during service cleanup:", error instanceof Error ? error.message : String(error));
         }
       }
     }
