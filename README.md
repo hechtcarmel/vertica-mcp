@@ -18,7 +18,7 @@ A Model Context Protocol (MCP) server for Vertica databases. Enables AI assistan
 ### Claude Code
 
 ```bash
-claude mcp add vertica --scope user -- npx -y @hechtcarmel/vertica-mcp  --env-file /path/to/your/.env
+claude mcp add vertica --scope user -- npx -y @hechtcarmel/vertica-mcp@latest  --env-file /path/to/your/.env
 ```
 
 Create your `.env` file with connection details:
