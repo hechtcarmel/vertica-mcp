@@ -16,6 +16,11 @@ import {
   determineTableType,
   resolveSchemaName,
 } from "../utils/table-helpers.js";
+import {
+  getRouter,
+  type SubclusterRouterConfig,
+} from "../routing/subcluster-router.js";
+import { parseSchedule } from "../routing/schedule.js";
 
 type Connection = any;
 
@@ -43,7 +48,9 @@ export class VerticaService {
   }
 
   /**
-   * Establish connection to Vertica database
+   * Establish connection to Vertica database.
+   * When VERTICA_PRIMARY_HOSTS is set, uses subcluster-aware routing with
+   * time-based selection and automatic failover. Otherwise connects to VERTICA_HOST.
    */
   async connect(): Promise<void> {
     if (this.connection) {
@@ -51,35 +58,32 @@ export class VerticaService {
     }
 
     try {
-      const clientConfig: any = {
-        host: this.config.host,
-        port: this.config.port,
-        database: this.config.database,
-        user: this.config.user,
-        password: this.config.password,
-        connectionTimeoutMillis: this.config.queryTimeout || 30000,
-      };
-
-      // Add SSL/TLS configuration if specified
-      // Note: vertica-nodejs client uses different SSL configuration than the old vertica package
-      if (this.config.ssl) {
-        clientConfig.ssl = true;
-        if (this.config.sslRejectUnauthorized !== undefined) {
-          clientConfig.ssl = this.config.sslRejectUnauthorized;
-        }
+      if (this.config.primaryHosts && this.config.primaryHosts.length > 0) {
+        const routerConfig = this.buildRouterConfig();
+        this.connection = await getRouter(routerConfig).connect();
       } else {
-        // Explicitly disable SSL/TLS for vertica-nodejs client
-        clientConfig.ssl = false;
+        const clientConfig: Record<string, unknown> = {
+          host: this.config.host,
+          port: this.config.port,
+          database: this.config.database,
+          user: this.config.user,
+          password: this.config.password,
+          connectionTimeoutMillis: this.config.queryTimeout ?? 30000,
+          ssl: this.config.ssl
+            ? (this.config.sslRejectUnauthorized !== undefined
+                ? this.config.sslRejectUnauthorized
+                : true)
+            : false,
+        };
+
+        const client = new verticaTyped.Client(clientConfig);
+        await client.connect();
+        this.connection = client;
+
+        console.error(
+          `${LOG_MESSAGES.DB_CONNECTED}: ${this.config.host}:${this.config.port}/${this.config.database}`
+        );
       }
-
-      const client = new verticaTyped.Client(clientConfig);
-
-      await client.connect();
-      this.connection = client;
-
-      console.error(
-        `${LOG_MESSAGES.DB_CONNECTED}: ${this.config.host}:${this.config.port}/${this.config.database}`
-      );
     } catch (error) {
       throw new Error(
         `Failed to connect to Vertica: ${
@@ -87,6 +91,28 @@ export class VerticaService {
         }`
       );
     }
+  }
+
+  private buildRouterConfig(): SubclusterRouterConfig {
+    const cfg = this.config;
+    const schedule = parseSchedule(
+      cfg.secondarySchedule ?? "MON-FRI 08:00-18:00",
+      cfg.timezone ?? "UTC"
+    );
+    return {
+      primary: { hosts: cfg.primaryHosts! },
+      secondary: {
+        hosts: cfg.secondaryHosts ?? [],
+        schedule,
+      },
+      port: cfg.port,
+      user: cfg.user,
+      password: cfg.password,
+      database: cfg.database,
+      queryTimeout: cfg.queryTimeout,
+      ssl: cfg.ssl,
+      sslRejectUnauthorized: cfg.sslRejectUnauthorized,
+    };
   }
 
   /**

@@ -1,5 +1,5 @@
 export interface VerticaConfig {
-  host: string;
+  host?: string;
   port: number;
   database: string;
   user: string;
@@ -10,6 +10,12 @@ export interface VerticaConfig {
   sslRejectUnauthorized?: boolean;
   defaultSchema?: string;
   readonlyMode?: boolean;
+  // Sub-cluster host lists
+  primaryHosts?: string[];
+  secondaryHosts?: string[];
+  // Secondary sub-cluster scheduling
+  secondarySchedule?: string;
+  timezone?: string;
 }
 
 export interface QueryResult {
