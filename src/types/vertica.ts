@@ -11,6 +11,7 @@ export interface VerticaConfig {
   sslRejectUnauthorized?: boolean;
   defaultSchema?: string;
   readonlyMode?: boolean;
+  connectionLoadBalance?: boolean;
 }
 
 export interface QueryResult {

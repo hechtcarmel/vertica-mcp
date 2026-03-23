@@ -50,6 +50,7 @@ const ConfigSchema = z.object({
   sslRejectUnauthorized: z.coerce.boolean().default(true),
   defaultSchema: z.string().default(DATABASE_CONSTANTS.DEFAULT_SCHEMA),
   readonlyMode: booleanFromString,
+  connectionLoadBalance: z.coerce.boolean().default(false),
 });
 
 /**
@@ -69,6 +70,7 @@ export function loadDatabaseConfig(): VerticaConfig {
     sslRejectUnauthorized: process.env.VERTICA_SSL_REJECT_UNAUTHORIZED,
     defaultSchema: process.env.VERTICA_DEFAULT_SCHEMA,
     readonlyMode: process.env.VERTICA_READONLY_MODE,
+    connectionLoadBalance: process.env.VERTICA_CONNECTION_LOAD_BALANCE,
   };
 
   try {
