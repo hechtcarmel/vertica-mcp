@@ -12,6 +12,8 @@ A Model Context Protocol (MCP) server for Vertica databases. Enables AI assistan
 - **Vertica-Optimized**: Projection awareness, columnar query support
 - **Production Ready**: Connection pooling, SSL support, timeout configuration
 - **Parameter Binding**: SQL injection protection
+- **Persistent Connection**: Reuses a single connection with configurable idle timeout
+- **Load Balancing**: Optional redirect to optimal Vertica node on connect
 
 ## Quick Start
 
@@ -96,9 +98,11 @@ VERTICA_PASSWORD                       # Password (optional)
 VERTICA_READONLY_MODE=true             # Default: true
 VERTICA_CONNECTION_LIMIT=10            # Default: 10 (max: 100)
 VERTICA_QUERY_TIMEOUT=60000            # Default: 60000ms
+VERTICA_IDLE_TIMEOUT=3600000           # Default: 3600000ms (1h), range: 60s-24h
 VERTICA_SSL=false                      # Default: false
 VERTICA_SSL_REJECT_UNAUTHORIZED=true   # Default: true
 VERTICA_DEFAULT_SCHEMA=public          # Default: public
+VERTICA_CONNECTION_LOAD_BALANCE=false  # Default: false
 ```
 
 ### Enabling Write Operations
@@ -110,6 +114,24 @@ VERTICA_READONLY_MODE=false
 ```
 
 **Warning**: Only disable readonly mode if you understand the implications.
+
+### Persistent Connection & Idle Timeout
+
+The server reuses a single connection across tool calls. If idle for longer than `VERTICA_IDLE_TIMEOUT`, it disconnects automatically and reconnects on next use.
+
+```env
+VERTICA_IDLE_TIMEOUT=3600000  # 1 hour (default), min: 60000ms, max: 86400000ms
+```
+
+### Connection Load Balancing
+
+When enabled, the server queries Vertica's `DESCRIBE_LOAD_BALANCE_DECISION` on first connect and transparently reconnects to the optimal node if a redirect is available, matching the behavior of Vertica JDBC/ODBC drivers.
+
+```env
+VERTICA_CONNECTION_LOAD_BALANCE=true
+```
+
+> **Note**: Requires that the redirect IP is reachable from the MCP server host.
 
 ## Available Tools
 
@@ -178,6 +200,9 @@ VERTICA_QUERY_TIMEOUT=300000  # 5 minutes
 
 ### Large Result Sets
 Use `stream_query` instead of `execute_query` for queries returning >10,000 rows.
+
+### Load Balance Redirect Fails
+If `VERTICA_CONNECTION_LOAD_BALANCE=true` but routing fails, the server logs a warning and stays on the initial host - no error is returned to the client. Check that all Vertica cluster nodes are reachable from the MCP server.
 
 ## Requirements
 
