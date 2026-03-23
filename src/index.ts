@@ -83,7 +83,8 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-// Import all tools
+// Import connection manager and all tools
+import { ConnectionManager } from "./services/connection-manager.js";
 import ExecuteQueryTool from "./tools/execute-query.js";
 import StreamQueryTool from "./tools/stream-query.js";
 import ListTablesTool from "./tools/list-tables.js";
@@ -185,12 +186,12 @@ process.on("uncaughtException", (error) => {
 
 process.on("SIGTERM", () => {
   console.error("Received SIGTERM, shutting down gracefully");
-  process.exit(0);
+  ConnectionManager.getInstance().disconnect().finally(() => process.exit(0));
 });
 
 process.on("SIGINT", () => {
   console.error("Received SIGINT, shutting down gracefully");
-  process.exit(0);
+  ConnectionManager.getInstance().disconnect().finally(() => process.exit(0));
 });
 
 main().catch((error) => {

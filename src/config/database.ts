@@ -40,6 +40,12 @@ const ConfigSchema = z.object({
     .min(1000)
     .max(300000)
     .default(DATABASE_CONSTANTS.DEFAULT_QUERY_TIMEOUT),
+  idleTimeout: z.coerce
+    .number()
+    .int()
+    .min(DATABASE_CONSTANTS.MIN_IDLE_TIMEOUT)
+    .max(DATABASE_CONSTANTS.MAX_IDLE_TIMEOUT)
+    .default(DATABASE_CONSTANTS.DEFAULT_IDLE_TIMEOUT),
   ssl: z.coerce.boolean().default(false),
   sslRejectUnauthorized: z.coerce.boolean().default(true),
   defaultSchema: z.string().default(DATABASE_CONSTANTS.DEFAULT_SCHEMA),
@@ -58,6 +64,7 @@ export function loadDatabaseConfig(): VerticaConfig {
     password: process.env.VERTICA_PASSWORD,
     connectionLimit: process.env.VERTICA_CONNECTION_LIMIT,
     queryTimeout: process.env.VERTICA_QUERY_TIMEOUT,
+    idleTimeout: process.env.VERTICA_IDLE_TIMEOUT,
     ssl: process.env.VERTICA_SSL,
     sslRejectUnauthorized: process.env.VERTICA_SSL_REJECT_UNAUTHORIZED,
     defaultSchema: process.env.VERTICA_DEFAULT_SCHEMA,

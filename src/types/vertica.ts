@@ -6,6 +6,7 @@ export interface VerticaConfig {
   password?: string;
   connectionLimit?: number;
   queryTimeout?: number;
+  idleTimeout?: number;
   ssl?: boolean;
   sslRejectUnauthorized?: boolean;
   defaultSchema?: string;

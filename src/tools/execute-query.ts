@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { MCPTool } from "../types/tool.js";
-import { VerticaService } from "../services/vertica-service.js";
+import { ConnectionManager } from "../services/connection-manager.js";
 import { getDatabaseConfig } from "../config/database.js";
 import { formatQueryResult, safeJsonStringify } from "../utils/response-formatter.js";
 
@@ -74,11 +74,9 @@ export default class ExecuteQueryTool implements MCPTool {
   async execute(input: Record<string, unknown>): Promise<string> {
     // Validate input
     const parsed = this.parseInput(input);
-    let service: VerticaService | null = null;
 
     try {
-      const config = getDatabaseConfig();
-      service = new VerticaService(config);
+      const service = await ConnectionManager.getInstance().getConnection();
 
       const result = await service.executeQuery(
         parsed.sql,
@@ -112,14 +110,6 @@ export default class ExecuteQueryTool implements MCPTool {
         },
         2
       );
-    } finally {
-      if (service) {
-        try {
-          await service.disconnect();
-        } catch (error) {
-          console.error("Warning during service cleanup:", error instanceof Error ? error.message : String(error));
-        }
-      }
     }
   }
 

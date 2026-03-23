@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { MCPTool } from "../types/tool.js";
-import { VerticaService } from "../services/vertica-service.js";
+import { ConnectionManager } from "../services/connection-manager.js";
 import { getDatabaseConfig } from "../config/database.js";
 import { safeJsonStringify } from "../utils/response-formatter.js";
 
@@ -33,15 +33,14 @@ export default class ListIndexesTool implements MCPTool {
   async execute(input: Record<string, unknown>): Promise<string> {
     // Validate input
     const parsed = this.parseInput(input);
-    let verticaService: VerticaService | null = null;
 
     try {
       // Create Vertica service instance
       const config = getDatabaseConfig();
-      verticaService = new VerticaService(config);
+      const service = await ConnectionManager.getInstance().getConnection();
 
       // List indexes
-      const indexes = await verticaService.listIndexes(
+      const indexes = await service.listIndexes(
         parsed.tableName,
         parsed.schemaName
       );
@@ -78,14 +77,6 @@ export default class ListIndexesTool implements MCPTool {
         },
         2
       );
-    } finally {
-      if (verticaService) {
-        try {
-          await verticaService.disconnect();
-        } catch (error) {
-          console.error("Warning during service cleanup:", error instanceof Error ? error.message : String(error));
-        }
-      }
     }
   }
 
