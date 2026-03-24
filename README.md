@@ -96,7 +96,6 @@ VERTICA_USER          # Username
 VERTICA_PORT=5433                      # Default: 5433
 VERTICA_PASSWORD                       # Password (optional)
 VERTICA_READONLY_MODE=true             # Default: true
-VERTICA_CONNECTION_LIMIT=10            # Default: 10 (max: 100)
 VERTICA_QUERY_TIMEOUT=60000            # Default: 60000ms
 VERTICA_IDLE_TIMEOUT=3600000           # Default: 3600000ms (1h), range: 60s-24h
 VERTICA_SSL=false                      # Default: false

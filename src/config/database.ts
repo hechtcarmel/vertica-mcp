@@ -28,12 +28,6 @@ const ConfigSchema = z.object({
   database: z.string().min(1, "VERTICA_DATABASE is required"),
   user: z.string().min(1, "VERTICA_USER is required"),
   password: z.string().optional(),
-  connectionLimit: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(100)
-    .default(DATABASE_CONSTANTS.DEFAULT_CONNECTION_LIMIT),
   queryTimeout: z.coerce
     .number()
     .int()
@@ -63,7 +57,6 @@ export function loadDatabaseConfig(): VerticaConfig {
     database: process.env.VERTICA_DATABASE,
     user: process.env.VERTICA_USER,
     password: process.env.VERTICA_PASSWORD,
-    connectionLimit: process.env.VERTICA_CONNECTION_LIMIT,
     queryTimeout: process.env.VERTICA_QUERY_TIMEOUT,
     idleTimeout: process.env.VERTICA_IDLE_TIMEOUT,
     ssl: process.env.VERTICA_SSL,
