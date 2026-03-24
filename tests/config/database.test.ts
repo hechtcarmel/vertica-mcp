@@ -58,6 +58,8 @@ describe("database config", () => {
         sslRejectUnauthorized: true,
         defaultSchema: "custom",
         readonlyMode: false,
+        idleTimeout: 3600000,
+        connectionLoadBalance: false,
       });
     });
 

@@ -70,6 +70,7 @@ export class ConnectionManager {
       this.service = new VerticaService(redirectConfig);
       await this.service.connect();
     } catch (error) {
+      this.service = null;
       // Keep existing connection on initial host — no rethrow
       console.error(
         LOG_MESSAGES.DB_LOAD_BALANCE_SKIP,

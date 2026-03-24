@@ -9,24 +9,20 @@ import {
 import ExecuteQueryTool from "../../src/tools/execute-query.js";
 import type { QueryResult } from "../../src/types/vertica.js";
 
-// Mock the service and config
-jest.mock("../../src/services/vertica-service.js");
+// Mock the connection manager and config
+jest.mock("../../src/services/connection-manager.js");
 jest.mock("../../src/config/database.js");
 
-import { VerticaService } from "../../src/services/vertica-service.js";
+import { ConnectionManager } from "../../src/services/connection-manager.js";
 import { getDatabaseConfig } from "../../src/config/database.js";
 
-// Type the mocked modules
-const MockedVerticaService = VerticaService as jest.MockedClass<
-  typeof VerticaService
->;
 const mockedGetDatabaseConfig = getDatabaseConfig as jest.MockedFunction<
   typeof getDatabaseConfig
 >;
 
 describe("ExecuteQueryTool", () => {
   let tool: ExecuteQueryTool;
-  let mockService: jest.Mocked<VerticaService>;
+  let mockService: { executeQuery: jest.Mock };
 
   // Helper to create proper QueryResult
   const createMockResult = (
@@ -56,13 +52,13 @@ describe("ExecuteQueryTool", () => {
   beforeEach(() => {
     tool = new ExecuteQueryTool();
 
-    // Create mock service instance
     mockService = {
       executeQuery: jest.fn(),
-      disconnect: jest.fn(),
-    } as any;
+    };
 
-    MockedVerticaService.mockImplementation(() => mockService);
+    (ConnectionManager.getInstance as jest.Mock) = jest.fn().mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(mockService),
+    });
 
     // Mock database config
     mockedGetDatabaseConfig.mockReturnValue({
@@ -101,7 +97,7 @@ describe("ExecuteQueryTool", () => {
 
   describe("input validation", () => {
     it("should accept valid SQL with no parameters", async () => {
-      mockService.executeQuery.mockResolvedValue(
+      (mockService.executeQuery as jest.Mock).mockResolvedValue(
         createMockResult([{ id: 1, name: "test" }])
       );
 
@@ -116,7 +112,7 @@ describe("ExecuteQueryTool", () => {
     });
 
     it("should accept valid SQL with parameters", async () => {
-      mockService.executeQuery.mockResolvedValue(
+      (mockService.executeQuery as jest.Mock).mockResolvedValue(
         createMockResult([{ id: 1, name: "test" }])
       );
 
@@ -158,7 +154,7 @@ describe("ExecuteQueryTool", () => {
         { id: 2, name: "Bob" },
       ];
 
-      mockService.executeQuery.mockResolvedValue(createMockResult(mockRows));
+      (mockService.executeQuery as jest.Mock).mockResolvedValue(createMockResult(mockRows));
 
       const result = await tool.execute({ sql: "SELECT * FROM users" });
       const parsed = JSON.parse(result);
@@ -175,7 +171,7 @@ describe("ExecuteQueryTool", () => {
     });
 
     it("should handle empty result set", async () => {
-      mockService.executeQuery.mockResolvedValue(createMockResult([]));
+      (mockService.executeQuery as jest.Mock).mockResolvedValue(createMockResult([]));
 
       const result = await tool.execute({ sql: "SELECT * FROM empty_table" });
       const parsed = JSON.parse(result);
@@ -184,19 +180,11 @@ describe("ExecuteQueryTool", () => {
       expect(parsed.rowCount).toBe(0);
       expect(parsed.rows).toEqual([]);
     });
-
-    it("should disconnect service after execution", async () => {
-      mockService.executeQuery.mockResolvedValue(createMockResult([]));
-
-      await tool.execute({ sql: "SELECT 1" });
-
-      expect(mockService.disconnect).toHaveBeenCalled();
-    });
   });
 
   describe("error handling", () => {
     it("should handle database connection errors", async () => {
-      mockService.executeQuery.mockRejectedValue(
+      (mockService.executeQuery as jest.Mock).mockRejectedValue(
         new Error("Connection failed")
       );
 
@@ -210,7 +198,7 @@ describe("ExecuteQueryTool", () => {
     });
 
     it("should handle SQL syntax errors", async () => {
-      mockService.executeQuery.mockRejectedValue(new Error("Syntax error"));
+      (mockService.executeQuery as jest.Mock).mockRejectedValue(new Error("Syntax error"));
 
       const result = await tool.execute({ sql: "INVALID SQL" });
       const parsed = JSON.parse(result);
@@ -221,8 +209,8 @@ describe("ExecuteQueryTool", () => {
     });
 
     it("should handle service creation errors", async () => {
-      mockedGetDatabaseConfig.mockImplementation(() => {
-        throw new Error("Config error");
+      (ConnectionManager.getInstance as jest.Mock) = jest.fn().mockReturnValue({
+        getConnection: jest.fn().mockRejectedValue(new Error("Config error")),
       });
 
       const result = await tool.execute({ sql: "SELECT 1" });
@@ -231,27 +219,11 @@ describe("ExecuteQueryTool", () => {
       expect(parsed.success).toBe(false);
       expect(parsed.error).toBe("Config error");
     });
-
-    it("should disconnect even when execution fails", async () => {
-      mockService.executeQuery.mockRejectedValue(new Error("Query failed"));
-
-      await tool.execute({ sql: "SELECT 1" });
-
-      expect(mockService.disconnect).toHaveBeenCalled();
-    });
-
-    it("should handle disconnect errors gracefully", async () => {
-      mockService.executeQuery.mockResolvedValue(createMockResult([]));
-      mockService.disconnect.mockRejectedValue(new Error("Disconnect failed"));
-
-      // Should not throw, just log warning
-      await expect(tool.execute({ sql: "SELECT 1" })).resolves.not.toThrow();
-    });
   });
 
   describe("parameter handling", () => {
     it("should handle numeric parameters", async () => {
-      mockService.executeQuery.mockResolvedValue(createMockResult([]));
+      (mockService.executeQuery as jest.Mock).mockResolvedValue(createMockResult([]));
 
       await tool.execute({
         sql: "SELECT * FROM users WHERE id = ? AND age > ?",
@@ -265,7 +237,7 @@ describe("ExecuteQueryTool", () => {
     });
 
     it("should handle string parameters", async () => {
-      mockService.executeQuery.mockResolvedValue(createMockResult([]));
+      (mockService.executeQuery as jest.Mock).mockResolvedValue(createMockResult([]));
 
       await tool.execute({
         sql: "SELECT * FROM users WHERE name = ?",
@@ -279,7 +251,7 @@ describe("ExecuteQueryTool", () => {
     });
 
     it("should handle mixed parameter types", async () => {
-      mockService.executeQuery.mockResolvedValue(createMockResult([]));
+      (mockService.executeQuery as jest.Mock).mockResolvedValue(createMockResult([]));
 
       await tool.execute({
         sql: "SELECT * FROM users WHERE id = ? AND name = ? AND active = ?",

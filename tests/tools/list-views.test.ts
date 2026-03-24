@@ -7,33 +7,33 @@ import {
   jest,
 } from "@jest/globals";
 import ListViewsTool from "../../src/tools/list-views.js";
-import { VerticaService } from "../../src/services/vertica-service.js";
 import { getDatabaseConfig } from "../../src/config/database.js";
 import type { ViewInfo } from "../../src/types/vertica.js";
 
 // Mock modules
-jest.mock("../../src/services/vertica-service.js");
+jest.mock("../../src/services/connection-manager.js");
 jest.mock("../../src/config/database.js");
 
-const mockedVerticaService = VerticaService as jest.MockedClass<
-  typeof VerticaService
->;
+import { ConnectionManager } from "../../src/services/connection-manager.js";
+
 const mockedGetDatabaseConfig = getDatabaseConfig as jest.MockedFunction<
   typeof getDatabaseConfig
 >;
 
 describe("ListViewsTool", () => {
   let tool: ListViewsTool;
-  let mockServiceInstance: jest.Mocked<VerticaService>;
+  let mockServiceInstance: { listViews: jest.Mock };
 
   beforeEach(() => {
     tool = new ListViewsTool();
     mockServiceInstance = {
       listViews: jest.fn(),
-      disconnect: jest.fn().mockResolvedValue(undefined),
-    } as any;
+    };
 
-    mockedVerticaService.mockImplementation(() => mockServiceInstance);
+    (ConnectionManager.getInstance as jest.Mock) = jest.fn().mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(mockServiceInstance),
+    });
+
     mockedGetDatabaseConfig.mockReturnValue({
       host: "localhost",
       port: 5433,
@@ -72,7 +72,7 @@ describe("ListViewsTool", () => {
   describe("Input Validation", () => {
     it("should accept empty input", async () => {
       const mockViews: ViewInfo[] = [];
-      mockServiceInstance.listViews.mockResolvedValue(mockViews);
+      (mockServiceInstance.listViews as jest.Mock).mockResolvedValue(mockViews);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -83,7 +83,7 @@ describe("ListViewsTool", () => {
 
     it("should accept valid input with schemaName", async () => {
       const mockViews: ViewInfo[] = [];
-      mockServiceInstance.listViews.mockResolvedValue(mockViews);
+      (mockServiceInstance.listViews as jest.Mock).mockResolvedValue(mockViews);
 
       const result = await tool.execute({ schemaName: "custom_schema" });
       const parsed = JSON.parse(result);
@@ -102,7 +102,7 @@ describe("ListViewsTool", () => {
   describe("Successful Execution", () => {
     it("should return empty list when no views exist", async () => {
       const mockViews: ViewInfo[] = [];
-      mockServiceInstance.listViews.mockResolvedValue(mockViews);
+      (mockServiceInstance.listViews as jest.Mock).mockResolvedValue(mockViews);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -112,7 +112,6 @@ describe("ListViewsTool", () => {
       expect(parsed.viewCount).toBe(0);
       expect(parsed.views).toEqual([]);
       expect(parsed.queriedAt).toBeDefined();
-      expect(mockServiceInstance.disconnect).toHaveBeenCalled();
     });
 
     it("should return list of views successfully", async () => {
@@ -133,7 +132,7 @@ describe("ListViewsTool", () => {
         },
       ];
 
-      mockServiceInstance.listViews.mockResolvedValue(mockViews);
+      (mockServiceInstance.listViews as jest.Mock).mockResolvedValue(mockViews);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -174,7 +173,7 @@ describe("ListViewsTool", () => {
         },
       ];
 
-      mockServiceInstance.listViews.mockResolvedValue(mockViews);
+      (mockServiceInstance.listViews as jest.Mock).mockResolvedValue(mockViews);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -196,7 +195,7 @@ describe("ListViewsTool", () => {
         },
       ];
 
-      mockServiceInstance.listViews.mockResolvedValue(mockViews);
+      (mockServiceInstance.listViews as jest.Mock).mockResolvedValue(mockViews);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -215,7 +214,7 @@ describe("ListViewsTool", () => {
         },
       ];
 
-      mockServiceInstance.listViews.mockResolvedValue(mockViews);
+      (mockServiceInstance.listViews as jest.Mock).mockResolvedValue(mockViews);
 
       const result = await tool.execute({ schemaName: "custom_schema" });
       const parsed = JSON.parse(result);
@@ -230,7 +229,7 @@ describe("ListViewsTool", () => {
 
     it("should use default schema when none specified", async () => {
       const mockViews: ViewInfo[] = [];
-      mockServiceInstance.listViews.mockResolvedValue(mockViews);
+      (mockServiceInstance.listViews as jest.Mock).mockResolvedValue(mockViews);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -249,7 +248,7 @@ describe("ListViewsTool", () => {
       } as any);
 
       const mockViews: ViewInfo[] = [];
-      mockServiceInstance.listViews.mockResolvedValue(mockViews);
+      (mockServiceInstance.listViews as jest.Mock).mockResolvedValue(mockViews);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -261,7 +260,7 @@ describe("ListViewsTool", () => {
 
   describe("Error Handling", () => {
     it("should handle database connection errors", async () => {
-      mockServiceInstance.listViews.mockRejectedValue(
+      (mockServiceInstance.listViews as jest.Mock).mockRejectedValue(
         new Error("Connection failed")
       );
 
@@ -272,11 +271,10 @@ describe("ListViewsTool", () => {
       expect(parsed.error).toBe("Connection failed");
       expect(parsed.schemaName).toBeUndefined();
       expect(parsed.queriedAt).toBeDefined();
-      expect(mockServiceInstance.disconnect).toHaveBeenCalled();
     });
 
     it("should handle schema not found errors", async () => {
-      mockServiceInstance.listViews.mockRejectedValue(
+      (mockServiceInstance.listViews as jest.Mock).mockRejectedValue(
         new Error('Schema "unknown_schema" does not exist')
       );
 
@@ -289,7 +287,7 @@ describe("ListViewsTool", () => {
     });
 
     it("should handle permission errors", async () => {
-      mockServiceInstance.listViews.mockRejectedValue(
+      (mockServiceInstance.listViews as jest.Mock).mockRejectedValue(
         new Error('Permission denied for schema "restricted"')
       );
 
@@ -298,26 +296,6 @@ describe("ListViewsTool", () => {
 
       expect(parsed.success).toBe(false);
       expect(parsed.error).toBe('Permission denied for schema "restricted"');
-    });
-
-    it("should handle service cleanup errors gracefully", async () => {
-      const mockViews: ViewInfo[] = [];
-      mockServiceInstance.listViews.mockResolvedValue(mockViews);
-      mockServiceInstance.disconnect.mockRejectedValue(
-        new Error("Cleanup failed")
-      );
-
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
-
-      const result = await tool.execute({});
-      const parsed = JSON.parse(result);
-
-      expect(parsed.success).toBe(true);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Warning during service cleanup:",
-        expect.any(String)
-      );
-      consoleSpy.mockRestore();
     });
   });
 
@@ -330,7 +308,7 @@ describe("ListViewsTool", () => {
         owner: "testuser",
       }));
 
-      mockServiceInstance.listViews.mockResolvedValue(mockViews);
+      (mockServiceInstance.listViews as jest.Mock).mockResolvedValue(mockViews);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -341,7 +319,7 @@ describe("ListViewsTool", () => {
     });
 
     it("should handle non-Error objects in catch block", async () => {
-      mockServiceInstance.listViews.mockRejectedValue("String error");
+      (mockServiceInstance.listViews as jest.Mock).mockRejectedValue("String error");
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -360,7 +338,7 @@ describe("ListViewsTool", () => {
         },
       ];
 
-      mockServiceInstance.listViews.mockResolvedValue(mockViews);
+      (mockServiceInstance.listViews as jest.Mock).mockResolvedValue(mockViews);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -387,7 +365,7 @@ describe("ListViewsTool", () => {
         },
       ];
 
-      mockServiceInstance.listViews.mockResolvedValue(mockViews);
+      (mockServiceInstance.listViews as jest.Mock).mockResolvedValue(mockViews);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);

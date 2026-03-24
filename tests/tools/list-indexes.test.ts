@@ -7,33 +7,33 @@ import {
   jest,
 } from "@jest/globals";
 import ListIndexesTool from "../../src/tools/list-indexes.js";
-import { VerticaService } from "../../src/services/vertica-service.js";
 import { getDatabaseConfig } from "../../src/config/database.js";
 import type { IndexInfo } from "../../src/types/vertica.js";
 
 // Mock modules
-jest.mock("../../src/services/vertica-service.js");
+jest.mock("../../src/services/connection-manager.js");
 jest.mock("../../src/config/database.js");
 
-const mockedVerticaService = VerticaService as jest.MockedClass<
-  typeof VerticaService
->;
+import { ConnectionManager } from "../../src/services/connection-manager.js";
+
 const mockedGetDatabaseConfig = getDatabaseConfig as jest.MockedFunction<
   typeof getDatabaseConfig
 >;
 
 describe("ListIndexesTool", () => {
   let tool: ListIndexesTool;
-  let mockServiceInstance: jest.Mocked<VerticaService>;
+  let mockServiceInstance: { listIndexes: jest.Mock };
 
   beforeEach(() => {
     tool = new ListIndexesTool();
     mockServiceInstance = {
       listIndexes: jest.fn(),
-      disconnect: jest.fn().mockResolvedValue(undefined),
-    } as any;
+    };
 
-    mockedVerticaService.mockImplementation(() => mockServiceInstance);
+    (ConnectionManager.getInstance as jest.Mock) = jest.fn().mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(mockServiceInstance),
+    });
+
     mockedGetDatabaseConfig.mockReturnValue({
       host: "localhost",
       port: 5433,
@@ -76,7 +76,7 @@ describe("ListIndexesTool", () => {
   describe("Input Validation", () => {
     it("should accept valid input with tableName only", async () => {
       const mockIndexes: IndexInfo[] = [];
-      mockServiceInstance.listIndexes.mockResolvedValue(mockIndexes);
+      (mockServiceInstance.listIndexes as jest.Mock).mockResolvedValue(mockIndexes);
 
       const result = await tool.execute({ tableName: "test_table" });
       const parsed = JSON.parse(result);
@@ -90,7 +90,7 @@ describe("ListIndexesTool", () => {
 
     it("should accept valid input with tableName and schemaName", async () => {
       const mockIndexes: IndexInfo[] = [];
-      mockServiceInstance.listIndexes.mockResolvedValue(mockIndexes);
+      (mockServiceInstance.listIndexes as jest.Mock).mockResolvedValue(mockIndexes);
 
       const result = await tool.execute({
         tableName: "test_table",
@@ -120,7 +120,7 @@ describe("ListIndexesTool", () => {
   describe("Successful Execution", () => {
     it("should return empty list when no indexes exist", async () => {
       const mockIndexes: IndexInfo[] = [];
-      mockServiceInstance.listIndexes.mockResolvedValue(mockIndexes);
+      (mockServiceInstance.listIndexes as jest.Mock).mockResolvedValue(mockIndexes);
 
       const result = await tool.execute({ tableName: "test_table" });
       const parsed = JSON.parse(result);
@@ -132,7 +132,6 @@ describe("ListIndexesTool", () => {
       expect(parsed.indexes).toEqual([]);
       expect(parsed.note).toContain("projections");
       expect(parsed.queriedAt).toBeDefined();
-      expect(mockServiceInstance.disconnect).toHaveBeenCalled();
     });
 
     it("should return list of indexes successfully", async () => {
@@ -163,7 +162,7 @@ describe("ListIndexesTool", () => {
         },
       ];
 
-      mockServiceInstance.listIndexes.mockResolvedValue(mockIndexes);
+      (mockServiceInstance.listIndexes as jest.Mock).mockResolvedValue(mockIndexes);
 
       const result = await tool.execute({ tableName: "users" });
       const parsed = JSON.parse(result);
@@ -208,7 +207,7 @@ describe("ListIndexesTool", () => {
         },
       ];
 
-      mockServiceInstance.listIndexes.mockResolvedValue(mockIndexes);
+      (mockServiceInstance.listIndexes as jest.Mock).mockResolvedValue(mockIndexes);
 
       const result = await tool.execute({
         tableName: "special_table",
@@ -228,7 +227,7 @@ describe("ListIndexesTool", () => {
 
     it("should use default schema when none specified", async () => {
       const mockIndexes: IndexInfo[] = [];
-      mockServiceInstance.listIndexes.mockResolvedValue(mockIndexes);
+      (mockServiceInstance.listIndexes as jest.Mock).mockResolvedValue(mockIndexes);
 
       const result = await tool.execute({ tableName: "test_table" });
       const parsed = JSON.parse(result);
@@ -250,7 +249,7 @@ describe("ListIndexesTool", () => {
       } as any);
 
       const mockIndexes: IndexInfo[] = [];
-      mockServiceInstance.listIndexes.mockResolvedValue(mockIndexes);
+      (mockServiceInstance.listIndexes as jest.Mock).mockResolvedValue(mockIndexes);
 
       const result = await tool.execute({ tableName: "test_table" });
       const parsed = JSON.parse(result);
@@ -262,7 +261,7 @@ describe("ListIndexesTool", () => {
 
   describe("Error Handling", () => {
     it("should handle database connection errors", async () => {
-      mockServiceInstance.listIndexes.mockRejectedValue(
+      (mockServiceInstance.listIndexes as jest.Mock).mockRejectedValue(
         new Error("Connection failed")
       );
 
@@ -274,11 +273,10 @@ describe("ListIndexesTool", () => {
       expect(parsed.tableName).toBe("test_table");
       expect(parsed.schemaName).toBeUndefined();
       expect(parsed.queriedAt).toBeDefined();
-      expect(mockServiceInstance.disconnect).toHaveBeenCalled();
     });
 
     it("should handle table not found errors", async () => {
-      mockServiceInstance.listIndexes.mockRejectedValue(
+      (mockServiceInstance.listIndexes as jest.Mock).mockRejectedValue(
         new Error('Table "unknown_table" does not exist')
       );
 
@@ -291,7 +289,7 @@ describe("ListIndexesTool", () => {
     });
 
     it("should handle schema not found errors", async () => {
-      mockServiceInstance.listIndexes.mockRejectedValue(
+      (mockServiceInstance.listIndexes as jest.Mock).mockRejectedValue(
         new Error('Schema "unknown_schema" does not exist')
       );
 
@@ -308,7 +306,7 @@ describe("ListIndexesTool", () => {
     });
 
     it("should handle permission errors", async () => {
-      mockServiceInstance.listIndexes.mockRejectedValue(
+      (mockServiceInstance.listIndexes as jest.Mock).mockRejectedValue(
         new Error('Permission denied for table "restricted.sensitive_table"')
       );
 
@@ -323,26 +321,6 @@ describe("ListIndexesTool", () => {
         'Permission denied for table "restricted.sensitive_table"'
       );
     });
-
-    it("should handle service cleanup errors gracefully", async () => {
-      const mockIndexes: IndexInfo[] = [];
-      mockServiceInstance.listIndexes.mockResolvedValue(mockIndexes);
-      mockServiceInstance.disconnect.mockRejectedValue(
-        new Error("Cleanup failed")
-      );
-
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
-
-      const result = await tool.execute({ tableName: "test_table" });
-      const parsed = JSON.parse(result);
-
-      expect(parsed.success).toBe(true);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Warning during service cleanup:",
-        expect.any(String)
-      );
-      consoleSpy.mockRestore();
-    });
   });
 
   describe("Edge Cases", () => {
@@ -356,7 +334,7 @@ describe("ListIndexesTool", () => {
         ordinalPosition: 1,
       }));
 
-      mockServiceInstance.listIndexes.mockResolvedValue(mockIndexes);
+      (mockServiceInstance.listIndexes as jest.Mock).mockResolvedValue(mockIndexes);
 
       const result = await tool.execute({ tableName: "complex_table" });
       const parsed = JSON.parse(result);
@@ -367,7 +345,7 @@ describe("ListIndexesTool", () => {
     });
 
     it("should handle non-Error objects in catch block", async () => {
-      mockServiceInstance.listIndexes.mockRejectedValue("String error");
+      (mockServiceInstance.listIndexes as jest.Mock).mockRejectedValue("String error");
 
       const result = await tool.execute({ tableName: "test_table" });
       const parsed = JSON.parse(result);
@@ -396,7 +374,7 @@ describe("ListIndexesTool", () => {
         },
       ];
 
-      mockServiceInstance.listIndexes.mockResolvedValue(mockIndexes);
+      (mockServiceInstance.listIndexes as jest.Mock).mockResolvedValue(mockIndexes);
 
       const result = await tool.execute({ tableName: "users" });
       const parsed = JSON.parse(result);
@@ -408,7 +386,7 @@ describe("ListIndexesTool", () => {
     });
 
     it("should handle undefined schemaName in error response", async () => {
-      mockServiceInstance.listIndexes.mockRejectedValue(
+      (mockServiceInstance.listIndexes as jest.Mock).mockRejectedValue(
         new Error("Service error")
       );
 
