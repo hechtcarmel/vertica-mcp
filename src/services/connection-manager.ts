@@ -8,6 +8,8 @@ export class ConnectionManager {
   private static instance: ConnectionManager;
   private service: VerticaService | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private connecting: Promise<void> | null = null;
+  private config = getDatabaseConfig();
 
   private constructor() {}
 
@@ -21,18 +23,26 @@ export class ConnectionManager {
   // Establish connection on first use, with optional load balance routing
   async getConnection(): Promise<VerticaService> {
     if (!this.service) {
-      const config = getDatabaseConfig();
-      this.service = new VerticaService(config);
-      await this.service.connect();
-    }
-
-    const config = getDatabaseConfig();
-    if (config.connectionLoadBalance) {
-      await this._applyLoadBalance(config);
+      // Prevent concurrent connection attempts
+      if (!this.connecting) {
+        this.connecting = this._connect().finally(() => {
+          this.connecting = null;
+        });
+      }
+      await this.connecting;
     }
 
     this.resetIdleTimer();
-    return this.service;
+    return this.service!;
+  }
+
+  private async _connect(): Promise<void> {
+    this.service = new VerticaService(this.config);
+    await this.service.connect();
+
+    if (this.config.connectionLoadBalance) {
+      await this._applyLoadBalance(this.config);
+    }
   }
 
   // Resolve target host via DESCRIBE_LOAD_BALANCE_DECISION, reconnect if different
@@ -64,14 +74,16 @@ export class ConnectionManager {
       }
 
       console.error(`${LOG_MESSAGES.DB_LOAD_BALANCE_ROUTING} ${service.getHost()} → ${redirectIp}`);
-      await service.disconnect();
 
+      // Connect to the target node first, then close the original
       const redirectConfig = { ...config, host: redirectIp };
-      this.service = new VerticaService(redirectConfig);
-      await this.service.connect();
+      const redirected = new VerticaService(redirectConfig);
+      await redirected.connect();
+
+      await service.disconnect();
+      this.service = redirected;
     } catch (error) {
-      this.service = null;
-      // Keep existing connection on initial host — no rethrow
+      // Keep existing connection on initial host - no rethrow
       console.error(
         LOG_MESSAGES.DB_LOAD_BALANCE_SKIP,
         error instanceof Error ? error.message : String(error)
@@ -85,9 +97,6 @@ export class ConnectionManager {
       clearTimeout(this.idleTimer);
     }
 
-    const config = getDatabaseConfig();
-    const timeout = config.idleTimeout!;
-
     this.idleTimer = setTimeout(() => {
       this.handleIdleTimeout().catch((error) => {
         console.error(
@@ -95,7 +104,7 @@ export class ConnectionManager {
           error instanceof Error ? error.message : String(error)
         );
       });
-    }, timeout);
+    }, this.config.idleTimeout!);
   }
 
   private async handleIdleTimeout(): Promise<void> {
