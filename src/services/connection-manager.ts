@@ -24,10 +24,11 @@ export class ConnectionManager {
       const config = getDatabaseConfig();
       this.service = new VerticaService(config);
       await this.service.connect();
+    }
 
-      if (config.connectionLoadBalance) {
-        await this._applyLoadBalance(config);
-      }
+    const config = getDatabaseConfig();
+    if (config.connectionLoadBalance) {
+      await this._applyLoadBalance(config);
     }
 
     this.resetIdleTimer();
@@ -38,8 +39,17 @@ export class ConnectionManager {
   private async _applyLoadBalance(config: VerticaConfig): Promise<void> {
     try {
       const service = this.service!;
+
+      // Get client IP from current session
+      const ipResult = await service.executeQuery(
+        "SELECT SPLIT_PART(CLIENT_HOSTNAME, ':', 1) AS client_ip FROM V_MONITOR.CURRENT_SESSION"
+      );
+      const clientIp = ipResult.rows[0]?.client_ip as string | undefined;
+      if (!clientIp) throw new Error("Could not determine client IP from current session");
+
+      // Get load balance decision for that IP
       const lbResult = await service.executeQuery(
-        "SELECT DESCRIBE_LOAD_BALANCE_DECISION(SPLIT_PART(CLIENT_HOSTNAME, ':', 1)) AS lb_decision FROM V_MONITOR.CURRENT_SESSION"
+        `SELECT DESCRIBE_LOAD_BALANCE_DECISION('${clientIp}') AS lb_decision`
       );
       const lbOutput = lbResult.rows[0]?.lb_decision as string | undefined;
       if (!lbOutput) throw new Error("Empty load balance decision response");
