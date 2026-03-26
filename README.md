@@ -224,4 +224,4 @@ This project's architecture and tool design are based on [mcp-vertica](https://g
 
 ---
 
-**Current Version**: 1.3.5
+**Current Version**: 1.4.0
