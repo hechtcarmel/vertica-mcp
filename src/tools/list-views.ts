@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { MCPTool } from "../types/tool.js";
-import { VerticaService } from "../services/vertica-service.js";
+import { ConnectionManager } from "../services/connection-manager.js";
 import { getDatabaseConfig } from "../config/database.js";
 import { safeJsonStringify } from "../utils/response-formatter.js";
 import { validateSchemaName } from "../utils/table-helpers.js";
@@ -28,7 +28,6 @@ export default class ListViewsTool implements MCPTool {
   async execute(input: Record<string, unknown>): Promise<string> {
     // Validate input
     const parsed = this.parseInput(input);
-    let verticaService: VerticaService | null = null;
 
     try {
       // Validate schema name if provided
@@ -38,10 +37,10 @@ export default class ListViewsTool implements MCPTool {
 
       // Create Vertica service instance
       const config = getDatabaseConfig();
-      verticaService = new VerticaService(config);
+      const service = await ConnectionManager.getInstance().getConnection();
 
       // List views
-      const views = await verticaService.listViews(parsed.schemaName);
+      const views = await service.listViews(parsed.schemaName);
 
       return safeJsonStringify(
         {
@@ -74,14 +73,6 @@ export default class ListViewsTool implements MCPTool {
         },
         2
       );
-    } finally {
-      if (verticaService) {
-        try {
-          await verticaService.disconnect();
-        } catch (error) {
-          console.error("Warning during service cleanup:", error instanceof Error ? error.message : String(error));
-        }
-      }
     }
   }
 

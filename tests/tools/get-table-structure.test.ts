@@ -7,7 +7,6 @@ import {
   jest,
 } from "@jest/globals";
 import GetTableStructureTool from "../../src/tools/get-table-structure.js";
-import { VerticaService } from "../../src/services/vertica-service.js";
 import { getDatabaseConfig } from "../../src/config/database.js";
 import {
   validateTableName,
@@ -16,13 +15,12 @@ import {
 import type { TableStructure } from "../../src/types/vertica.js";
 
 // Mock modules
-jest.mock("../../src/services/vertica-service.js");
+jest.mock("../../src/services/connection-manager.js");
 jest.mock("../../src/config/database.js");
 jest.mock("../../src/utils/table-helpers.js");
 
-const mockedVerticaService = VerticaService as jest.MockedClass<
-  typeof VerticaService
->;
+import { ConnectionManager } from "../../src/services/connection-manager.js";
+
 const mockedGetDatabaseConfig = getDatabaseConfig as jest.MockedFunction<
   typeof getDatabaseConfig
 >;
@@ -35,16 +33,18 @@ const mockedValidateSchemaName = validateSchemaName as jest.MockedFunction<
 
 describe("GetTableStructureTool", () => {
   let tool: GetTableStructureTool;
-  let mockServiceInstance: jest.Mocked<VerticaService>;
+  let mockServiceInstance: { getTableStructure: jest.Mock };
 
   beforeEach(() => {
     tool = new GetTableStructureTool();
     mockServiceInstance = {
       getTableStructure: jest.fn(),
-      disconnect: jest.fn().mockResolvedValue(undefined),
-    } as any;
+    };
 
-    mockedVerticaService.mockImplementation(() => mockServiceInstance);
+    (ConnectionManager.getInstance as jest.Mock) = jest.fn().mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(mockServiceInstance),
+    });
+
     mockedGetDatabaseConfig.mockReturnValue({
       host: "localhost",
       port: 5433,
@@ -98,7 +98,7 @@ describe("GetTableStructureTool", () => {
         owner: "testuser",
       };
 
-      mockServiceInstance.getTableStructure.mockResolvedValue(
+      (mockServiceInstance.getTableStructure as jest.Mock).mockResolvedValue(
         mockTableStructure
       );
 
@@ -120,7 +120,7 @@ describe("GetTableStructureTool", () => {
         owner: "testuser",
       };
 
-      mockServiceInstance.getTableStructure.mockResolvedValue(
+      (mockServiceInstance.getTableStructure as jest.Mock).mockResolvedValue(
         mockTableStructure
       );
 
@@ -172,7 +172,7 @@ describe("GetTableStructureTool", () => {
         comment: "Test table",
       };
 
-      mockServiceInstance.getTableStructure.mockResolvedValue(
+      (mockServiceInstance.getTableStructure as jest.Mock).mockResolvedValue(
         mockTableStructure
       );
 
@@ -181,7 +181,6 @@ describe("GetTableStructureTool", () => {
 
       expect(parsed.success).toBe(true);
       expect(parsed.queriedAt).toBeDefined();
-      expect(mockServiceInstance.disconnect).toHaveBeenCalled();
     });
 
     it("should pass correct parameters to service", async () => {
@@ -194,7 +193,7 @@ describe("GetTableStructureTool", () => {
         owner: "testuser",
       };
 
-      mockServiceInstance.getTableStructure.mockResolvedValue(
+      (mockServiceInstance.getTableStructure as jest.Mock).mockResolvedValue(
         mockTableStructure
       );
 
@@ -243,7 +242,7 @@ describe("GetTableStructureTool", () => {
     });
 
     it("should handle database connection errors", async () => {
-      mockServiceInstance.getTableStructure.mockRejectedValue(
+      (mockServiceInstance.getTableStructure as jest.Mock).mockRejectedValue(
         new Error("Connection failed")
       );
 
@@ -252,11 +251,10 @@ describe("GetTableStructureTool", () => {
 
       expect(parsed.success).toBe(false);
       expect(parsed.error).toBe("Connection failed");
-      expect(mockServiceInstance.disconnect).toHaveBeenCalled();
     });
 
     it("should handle table not found errors", async () => {
-      mockServiceInstance.getTableStructure.mockRejectedValue(
+      (mockServiceInstance.getTableStructure as jest.Mock).mockRejectedValue(
         new Error('Table "unknown_table" does not exist')
       );
 
@@ -266,36 +264,6 @@ describe("GetTableStructureTool", () => {
       expect(parsed.success).toBe(false);
       expect(parsed.error).toBe('Table "unknown_table" does not exist');
       expect(parsed.tableName).toBe("unknown_table");
-    });
-
-    it("should handle service cleanup errors gracefully", async () => {
-      const mockTableStructure: TableStructure = {
-        schemaName: "public",
-        tableName: "test_table",
-        columns: [],
-        constraints: [],
-        tableType: "TABLE",
-        owner: "testuser",
-      };
-
-      mockServiceInstance.getTableStructure.mockResolvedValue(
-        mockTableStructure
-      );
-      mockServiceInstance.disconnect.mockRejectedValue(
-        new Error("Cleanup failed")
-      );
-
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
-
-      const result = await tool.execute({ tableName: "test_table" });
-      const parsed = JSON.parse(result);
-
-      expect(parsed.success).toBe(true);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Warning during service cleanup:",
-        expect.any(String)
-      );
-      consoleSpy.mockRestore();
     });
   });
 
@@ -310,7 +278,7 @@ describe("GetTableStructureTool", () => {
         owner: "testuser",
       };
 
-      mockServiceInstance.getTableStructure.mockResolvedValue(
+      (mockServiceInstance.getTableStructure as jest.Mock).mockResolvedValue(
         mockTableStructure
       );
 
@@ -321,7 +289,7 @@ describe("GetTableStructureTool", () => {
     });
 
     it("should handle non-Error objects in catch block", async () => {
-      mockServiceInstance.getTableStructure.mockRejectedValue("String error");
+      (mockServiceInstance.getTableStructure as jest.Mock).mockRejectedValue("String error");
 
       const result = await tool.execute({ tableName: "test_table" });
       const parsed = JSON.parse(result);
@@ -331,7 +299,7 @@ describe("GetTableStructureTool", () => {
     });
 
     it("should handle undefined schemaName in error response", async () => {
-      mockServiceInstance.getTableStructure.mockRejectedValue(
+      (mockServiceInstance.getTableStructure as jest.Mock).mockRejectedValue(
         new Error("Service error")
       );
 

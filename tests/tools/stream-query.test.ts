@@ -9,24 +9,20 @@ import {
 import StreamQueryTool from "../../src/tools/stream-query.js";
 import type { StreamQueryResult } from "../../src/types/vertica.js";
 
-// Mock the service and config
-jest.mock("../../src/services/vertica-service.js");
+// Mock the connection manager and config
+jest.mock("../../src/services/connection-manager.js");
 jest.mock("../../src/config/database.js");
 
-import { VerticaService } from "../../src/services/vertica-service.js";
+import { ConnectionManager } from "../../src/services/connection-manager.js";
 import { getDatabaseConfig } from "../../src/config/database.js";
 
-// Type the mocked modules
-const MockedVerticaService = VerticaService as jest.MockedClass<
-  typeof VerticaService
->;
 const mockedGetDatabaseConfig = getDatabaseConfig as jest.MockedFunction<
   typeof getDatabaseConfig
 >;
 
 describe("StreamQueryTool", () => {
   let tool: StreamQueryTool;
-  let mockService: jest.Mocked<VerticaService>;
+  let mockService: { streamQuery: jest.Mock };
 
   // Helper to create mock stream result
   const createMockStreamResult = (
@@ -59,13 +55,13 @@ describe("StreamQueryTool", () => {
   beforeEach(() => {
     tool = new StreamQueryTool();
 
-    // Create mock service instance
     mockService = {
       streamQuery: jest.fn(),
-      disconnect: jest.fn(),
-    } as any;
+    };
 
-    MockedVerticaService.mockImplementation(() => mockService);
+    (ConnectionManager.getInstance as jest.Mock) = jest.fn().mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(mockService),
+    });
 
     // Mock database config
     mockedGetDatabaseConfig.mockReturnValue({
@@ -110,7 +106,7 @@ describe("StreamQueryTool", () => {
       const mockResults = [
         createMockStreamResult(1, [{ id: 1, name: "test" }], false),
       ];
-      mockService.streamQuery.mockImplementation(async function* () {
+      (mockService.streamQuery as jest.Mock).mockImplementation(async function* () {
         for (const result of mockResults) {
           yield result;
         }
@@ -131,7 +127,7 @@ describe("StreamQueryTool", () => {
 
     it("should accept custom batch size", async () => {
       const mockResults = [createMockStreamResult(1, [], false)];
-      mockService.streamQuery.mockImplementation(async function* () {
+      (mockService.streamQuery as jest.Mock).mockImplementation(async function* () {
         for (const result of mockResults) {
           yield result;
         }
@@ -153,7 +149,7 @@ describe("StreamQueryTool", () => {
 
     it("should accept max rows parameter", async () => {
       const mockResults = [createMockStreamResult(1, [], false)];
-      mockService.streamQuery.mockImplementation(async function* () {
+      (mockService.streamQuery as jest.Mock).mockImplementation(async function* () {
         for (const result of mockResults) {
           yield result;
         }
@@ -222,7 +218,7 @@ describe("StreamQueryTool", () => {
       ];
       const mockResults = [createMockStreamResult(1, mockRows, false)];
 
-      mockService.streamQuery.mockImplementation(async function* () {
+      (mockService.streamQuery as jest.Mock).mockImplementation(async function* () {
         for (const result of mockResults) {
           yield result;
         }
@@ -247,7 +243,7 @@ describe("StreamQueryTool", () => {
         createMockStreamResult(2, [{ id: 2, name: "Bob" }], false),
       ];
 
-      mockService.streamQuery.mockImplementation(async function* () {
+      (mockService.streamQuery as jest.Mock).mockImplementation(async function* () {
         for (const result of mockResults) {
           yield result;
         }
@@ -276,7 +272,7 @@ describe("StreamQueryTool", () => {
         )
       );
 
-      mockService.streamQuery.mockImplementation(async function* () {
+      (mockService.streamQuery as jest.Mock).mockImplementation(async function* () {
         for (const result of mockResults) {
           yield result;
         }
@@ -289,24 +285,11 @@ describe("StreamQueryTool", () => {
       expect(parsed.batchCount).toBe(101); // Should stop after 101 batches (> 100)
       expect(parsed.batches).toHaveLength(101);
     });
-
-    it("should disconnect service after streaming", async () => {
-      const mockResults = [createMockStreamResult(1, [], false)];
-      mockService.streamQuery.mockImplementation(async function* () {
-        for (const result of mockResults) {
-          yield result;
-        }
-      });
-
-      await tool.execute({ sql: "SELECT 1" });
-
-      expect(mockService.disconnect).toHaveBeenCalled();
-    });
   });
 
   describe("error handling", () => {
     it("should handle streaming errors", async () => {
-      mockService.streamQuery.mockImplementation(async function* () {
+      (mockService.streamQuery as jest.Mock).mockImplementation(async function* () {
         throw new Error("Streaming failed");
       });
 
@@ -319,8 +302,8 @@ describe("StreamQueryTool", () => {
     });
 
     it("should handle service creation errors", async () => {
-      mockedGetDatabaseConfig.mockImplementation(() => {
-        throw new Error("Config error");
+      (ConnectionManager.getInstance as jest.Mock) = jest.fn().mockReturnValue({
+        getConnection: jest.fn().mockRejectedValue(new Error("Config error")),
       });
 
       const result = await tool.execute({ sql: "SELECT 1" });
@@ -328,16 +311,6 @@ describe("StreamQueryTool", () => {
 
       expect(parsed.success).toBe(false);
       expect(parsed.error).toBe("Config error");
-    });
-
-    it("should disconnect even when streaming fails", async () => {
-      mockService.streamQuery.mockImplementation(async function* () {
-        throw new Error("Streaming failed");
-      });
-
-      await tool.execute({ sql: "SELECT 1" });
-
-      expect(mockService.disconnect).toHaveBeenCalled();
     });
   });
 
@@ -347,7 +320,7 @@ describe("StreamQueryTool", () => {
         createMockStreamResult(1, [{ id: 1, name: "test" }], false),
       ];
 
-      mockService.streamQuery.mockImplementation(async function* () {
+      (mockService.streamQuery as jest.Mock).mockImplementation(async function* () {
         for (const result of mockResults) {
           yield result;
         }

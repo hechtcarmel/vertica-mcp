@@ -108,6 +108,10 @@ export class VerticaService {
     }
   }
 
+  getHost(): string {
+    return this.config.host;
+  }
+
   /**
    * Check if connected to database
    */

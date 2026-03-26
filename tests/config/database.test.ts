@@ -17,7 +17,6 @@ describe("database config", () => {
     delete process.env.VERTICA_DATABASE;
     delete process.env.VERTICA_USER;
     delete process.env.VERTICA_PASSWORD;
-    delete process.env.VERTICA_CONNECTION_LIMIT;
     delete process.env.VERTICA_QUERY_TIMEOUT;
     delete process.env.VERTICA_SSL;
     delete process.env.VERTICA_SSL_REJECT_UNAUTHORIZED;
@@ -37,7 +36,6 @@ describe("database config", () => {
       process.env.VERTICA_DATABASE = "testdb";
       process.env.VERTICA_USER = "testuser";
       process.env.VERTICA_PASSWORD = "testpass";
-      process.env.VERTICA_CONNECTION_LIMIT = "20";
       process.env.VERTICA_QUERY_TIMEOUT = "30000";
       process.env.VERTICA_SSL = "true";
       process.env.VERTICA_SSL_REJECT_UNAUTHORIZED = "false";
@@ -52,12 +50,13 @@ describe("database config", () => {
         database: "testdb",
         user: "testuser",
         password: "testpass",
-        connectionLimit: 20,
         queryTimeout: 30000,
         ssl: true,
         sslRejectUnauthorized: true,
         defaultSchema: "custom",
         readonlyMode: false,
+        idleTimeout: 3600000,
+        connectionLoadBalance: false,
       });
     });
 
@@ -69,7 +68,6 @@ describe("database config", () => {
       const config = loadDatabaseConfig();
 
       expect(config.port).toBe(5433); // default
-      expect(config.connectionLimit).toBe(10); // default
       expect(config.queryTimeout).toBe(60000); // default
       expect(config.ssl).toBe(false); // default
       expect(config.sslRejectUnauthorized).toBe(true); // default
@@ -95,13 +93,11 @@ describe("database config", () => {
       process.env.VERTICA_DATABASE = "testdb";
       process.env.VERTICA_USER = "testuser";
       process.env.VERTICA_PORT = "5555";
-      process.env.VERTICA_CONNECTION_LIMIT = "15";
       process.env.VERTICA_QUERY_TIMEOUT = "45000";
 
       const config = loadDatabaseConfig();
 
       expect(config.port).toBe(5555);
-      expect(config.connectionLimit).toBe(15);
       expect(config.queryTimeout).toBe(45000);
     });
 
@@ -137,17 +133,6 @@ describe("database config", () => {
       process.env.VERTICA_DATABASE = "testdb";
       process.env.VERTICA_USER = "testuser";
       process.env.VERTICA_PORT = "70000"; // invalid port
-
-      expect(() => loadDatabaseConfig()).toThrow(
-        "Invalid database configuration"
-      );
-    });
-
-    it("should throw error for invalid connection limit", () => {
-      process.env.VERTICA_HOST = "localhost";
-      process.env.VERTICA_DATABASE = "testdb";
-      process.env.VERTICA_USER = "testuser";
-      process.env.VERTICA_CONNECTION_LIMIT = "0"; // invalid
 
       expect(() => loadDatabaseConfig()).toThrow(
         "Invalid database configuration"

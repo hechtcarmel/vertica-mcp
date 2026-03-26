@@ -4,12 +4,13 @@ export interface VerticaConfig {
   database: string;
   user: string;
   password?: string;
-  connectionLimit?: number;
   queryTimeout?: number;
+  idleTimeout?: number;
   ssl?: boolean;
   sslRejectUnauthorized?: boolean;
   defaultSchema?: string;
   readonlyMode?: boolean;
+  connectionLoadBalance?: boolean;
 }
 
 export interface QueryResult {

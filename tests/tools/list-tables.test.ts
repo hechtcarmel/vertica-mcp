@@ -7,33 +7,33 @@ import {
   jest,
 } from "@jest/globals";
 import ListTablesTool from "../../src/tools/list-tables.js";
-import { VerticaService } from "../../src/services/vertica-service.js";
 import { getDatabaseConfig } from "../../src/config/database.js";
 import type { TableInfo } from "../../src/types/vertica.js";
 
 // Mock modules
-jest.mock("../../src/services/vertica-service.js");
+jest.mock("../../src/services/connection-manager.js");
 jest.mock("../../src/config/database.js");
 
-const mockedVerticaService = VerticaService as jest.MockedClass<
-  typeof VerticaService
->;
+import { ConnectionManager } from "../../src/services/connection-manager.js";
+
 const mockedGetDatabaseConfig = getDatabaseConfig as jest.MockedFunction<
   typeof getDatabaseConfig
 >;
 
 describe("ListTablesTool", () => {
   let tool: ListTablesTool;
-  let mockServiceInstance: jest.Mocked<VerticaService>;
+  let mockServiceInstance: { listTables: jest.Mock };
 
   beforeEach(() => {
     tool = new ListTablesTool();
     mockServiceInstance = {
       listTables: jest.fn(),
-      disconnect: jest.fn().mockResolvedValue(undefined),
-    } as any;
+    };
 
-    mockedVerticaService.mockImplementation(() => mockServiceInstance);
+    (ConnectionManager.getInstance as jest.Mock) = jest.fn().mockReturnValue({
+      getConnection: jest.fn().mockResolvedValue(mockServiceInstance),
+    });
+
     mockedGetDatabaseConfig.mockReturnValue({
       host: "localhost",
       port: 5433,
@@ -72,7 +72,7 @@ describe("ListTablesTool", () => {
   describe("Input Validation", () => {
     it("should accept empty input", async () => {
       const mockTables: TableInfo[] = [];
-      mockServiceInstance.listTables.mockResolvedValue(mockTables);
+      (mockServiceInstance.listTables as jest.Mock).mockResolvedValue(mockTables);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -83,7 +83,7 @@ describe("ListTablesTool", () => {
 
     it("should accept valid input with schemaName", async () => {
       const mockTables: TableInfo[] = [];
-      mockServiceInstance.listTables.mockResolvedValue(mockTables);
+      (mockServiceInstance.listTables as jest.Mock).mockResolvedValue(mockTables);
 
       const result = await tool.execute({ schemaName: "custom_schema" });
       const parsed = JSON.parse(result);
@@ -102,7 +102,7 @@ describe("ListTablesTool", () => {
   describe("Successful Execution", () => {
     it("should return empty list when no tables exist", async () => {
       const mockTables: TableInfo[] = [];
-      mockServiceInstance.listTables.mockResolvedValue(mockTables);
+      (mockServiceInstance.listTables as jest.Mock).mockResolvedValue(mockTables);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -112,7 +112,6 @@ describe("ListTablesTool", () => {
       expect(parsed.tableCount).toBe(0);
       expect(parsed.tables).toEqual([]);
       expect(parsed.queriedAt).toBeDefined();
-      expect(mockServiceInstance.disconnect).toHaveBeenCalled();
     });
 
     it("should return list of tables successfully", async () => {
@@ -134,7 +133,7 @@ describe("ListTablesTool", () => {
         },
       ];
 
-      mockServiceInstance.listTables.mockResolvedValue(mockTables);
+      (mockServiceInstance.listTables as jest.Mock).mockResolvedValue(mockTables);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -169,7 +168,7 @@ describe("ListTablesTool", () => {
         },
       ];
 
-      mockServiceInstance.listTables.mockResolvedValue(mockTables);
+      (mockServiceInstance.listTables as jest.Mock).mockResolvedValue(mockTables);
 
       const result = await tool.execute({ schemaName: "custom_schema" });
       const parsed = JSON.parse(result);
@@ -184,7 +183,7 @@ describe("ListTablesTool", () => {
 
     it("should use default schema when none specified", async () => {
       const mockTables: TableInfo[] = [];
-      mockServiceInstance.listTables.mockResolvedValue(mockTables);
+      (mockServiceInstance.listTables as jest.Mock).mockResolvedValue(mockTables);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -203,7 +202,7 @@ describe("ListTablesTool", () => {
       } as any);
 
       const mockTables: TableInfo[] = [];
-      mockServiceInstance.listTables.mockResolvedValue(mockTables);
+      (mockServiceInstance.listTables as jest.Mock).mockResolvedValue(mockTables);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -215,7 +214,7 @@ describe("ListTablesTool", () => {
 
   describe("Error Handling", () => {
     it("should handle database connection errors", async () => {
-      mockServiceInstance.listTables.mockRejectedValue(
+      (mockServiceInstance.listTables as jest.Mock).mockRejectedValue(
         new Error("Connection failed")
       );
 
@@ -226,11 +225,10 @@ describe("ListTablesTool", () => {
       expect(parsed.error).toBe("Connection failed");
       expect(parsed.schemaName).toBeUndefined();
       expect(parsed.queriedAt).toBeDefined();
-      expect(mockServiceInstance.disconnect).toHaveBeenCalled();
     });
 
     it("should handle schema not found errors", async () => {
-      mockServiceInstance.listTables.mockRejectedValue(
+      (mockServiceInstance.listTables as jest.Mock).mockRejectedValue(
         new Error('Schema "unknown_schema" does not exist')
       );
 
@@ -243,7 +241,7 @@ describe("ListTablesTool", () => {
     });
 
     it("should handle permission errors", async () => {
-      mockServiceInstance.listTables.mockRejectedValue(
+      (mockServiceInstance.listTables as jest.Mock).mockRejectedValue(
         new Error('Permission denied for schema "restricted"')
       );
 
@@ -252,26 +250,6 @@ describe("ListTablesTool", () => {
 
       expect(parsed.success).toBe(false);
       expect(parsed.error).toBe('Permission denied for schema "restricted"');
-    });
-
-    it("should handle service cleanup errors gracefully", async () => {
-      const mockTables: TableInfo[] = [];
-      mockServiceInstance.listTables.mockResolvedValue(mockTables);
-      mockServiceInstance.disconnect.mockRejectedValue(
-        new Error("Cleanup failed")
-      );
-
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
-
-      const result = await tool.execute({});
-      const parsed = JSON.parse(result);
-
-      expect(parsed.success).toBe(true);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Warning during service cleanup:",
-        expect.any(String)
-      );
-      consoleSpy.mockRestore();
     });
   });
 
@@ -284,7 +262,7 @@ describe("ListTablesTool", () => {
         owner: "testuser",
       }));
 
-      mockServiceInstance.listTables.mockResolvedValue(mockTables);
+      (mockServiceInstance.listTables as jest.Mock).mockResolvedValue(mockTables);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -295,7 +273,7 @@ describe("ListTablesTool", () => {
     });
 
     it("should handle non-Error objects in catch block", async () => {
-      mockServiceInstance.listTables.mockRejectedValue("String error");
+      (mockServiceInstance.listTables as jest.Mock).mockRejectedValue("String error");
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
@@ -314,7 +292,7 @@ describe("ListTablesTool", () => {
         },
       ];
 
-      mockServiceInstance.listTables.mockResolvedValue(mockTables);
+      (mockServiceInstance.listTables as jest.Mock).mockResolvedValue(mockTables);
 
       const result = await tool.execute({});
       const parsed = JSON.parse(result);
