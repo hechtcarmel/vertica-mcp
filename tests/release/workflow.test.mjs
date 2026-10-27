@@ -1,13 +1,15 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   chmodSync,
+  existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { runInNewContext } from "node:vm";
@@ -189,4 +191,184 @@ describe("existing draft integrity guard", () => {
     expect(result.status).not.toBe(0);
     expect(result.calls).toHaveLength(2);
   });
+});
+
+const publishScript = job("publish")
+  .split("        run: |\n")[1]
+  .split("\n")
+  .map((line) => line.slice(10))
+  .join("\n");
+const npmCli = process.env.npm_execpath?.endsWith("npm-cli.js")
+  ? process.env.npm_execpath
+  : join(dirname(process.execPath), "../lib/node_modules/npm/bin/npm-cli.js");
+function isolatedNpmEnv(directory) {
+  const userConfig = join(directory, "user.npmrc");
+  const globalConfig = join(directory, "global.npmrc");
+  writeFileSync(userConfig, "");
+  writeFileSync(globalConfig, "");
+  return {
+    PATH: `${directory}:${process.env.PATH}`,
+    npm_config_userconfig: userConfig,
+    npm_config_globalconfig: globalConfig,
+    npm_config_cache: join(directory, "npm-cache"),
+    npm_config_offline: "true",
+    npm_config_ignore_scripts: "true",
+    npm_config_audit: "false",
+    npm_config_fund: "false",
+    npm_config_update_notifier: "false",
+    npm_config_loglevel: "error",
+  };
+}
+let packedFixture;
+beforeAll(() => {
+  const directory = mkdtempSync(join(tmpdir(), "vertica-local-package-"));
+  try {
+    const source = join(directory, "source");
+    mkdirSync(source);
+    writeFileSync(
+      join(source, "package.json"),
+      JSON.stringify({
+        name: "@vertica-mcp-release-tests/local-package",
+        version: "2.0.0",
+        files: ["index.js"],
+      }),
+    );
+    writeFileSync(join(source, "index.js"), "export const fixture = true;\n");
+    const result = spawnSync(
+      process.execPath,
+      [
+        npmCli,
+        "pack",
+        source,
+        "--pack-destination",
+        directory,
+        "--ignore-scripts",
+        "--json",
+      ],
+      {
+        cwd: directory,
+        env: isolatedNpmEnv(directory),
+        encoding: "utf8",
+        timeout: 10000,
+      },
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+    const [packed] = JSON.parse(result.stdout);
+    packedFixture = readFileSync(join(directory, packed.filename));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+const dryRunNpm = `#!/usr/bin/env node
+import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.FIXTURE_CALLS, JSON.stringify(args) + '\\n');
+if (args[0] !== 'publish') process.exit(99);
+// Dry-run is mandatory in this cloud test wrapper; no registry credentials exist.
+const result = spawnSync(process.execPath, [process.env.FIXTURE_NPM_CLI, ...args, '--dry-run', '--json'], {
+  env: process.env, encoding: 'utf8', timeout: 10000,
+});
+fs.writeFileSync(process.env.FIXTURE_NPM_REPORT, result.stdout ?? '');
+process.stderr.write(result.stderr ?? '');
+process.exit(result.status ?? 99);
+`;
+function publishFixture(names, validDigest = true, directoryInstead = false) {
+  const directory = mkdtempSync(join(tmpdir(), "vertica-local-publish-"));
+  directories.push(directory);
+  mkdirSync(join(directory, "artifacts"));
+  writeFileSync(join(directory, "package.json"), '{"type":"module"}');
+  for (const name of names) {
+    const path = join(directory, "artifacts", name);
+    if (directoryInstead) mkdirSync(path);
+    else writeFileSync(path, packedFixture);
+  }
+  const npm = join(directory, "npm");
+  writeFileSync(npm, dryRunNpm);
+  chmodSync(npm, 0o700);
+  // Catch any regression to GitHub shorthand locally before Git/SSH can run.
+  const gitCalls = join(directory, "git-calls");
+  const git = join(directory, "git");
+  writeFileSync(
+    git,
+    `#!/usr/bin/env node\nimport fs from 'node:fs'; fs.writeFileSync(process.env.FIXTURE_GIT_CALLS, 'unexpected git invocation'); process.exit(98);\n`,
+  );
+  chmodSync(git, 0o700);
+  const calls = join(directory, "npm-calls.jsonl");
+  const report = join(directory, "npm-report.json");
+  const result = spawnSync(
+    "bash",
+    ["-e", "-o", "pipefail", "-c", publishScript],
+    {
+      cwd: directory,
+      env: {
+        ...isolatedNpmEnv(directory),
+        DIST_TAG: "latest",
+        VALIDATED_SHA256: validDigest
+          ? createHash("sha256").update(packedFixture).digest("hex")
+          : "0".repeat(64),
+        FIXTURE_CALLS: calls,
+        FIXTURE_NPM_CLI: npmCli,
+        FIXTURE_NPM_REPORT: report,
+        FIXTURE_GIT_CALLS: gitCalls,
+      },
+      encoding: "utf8",
+      timeout: 15000,
+    },
+  );
+  expect(result.error).toBeUndefined();
+  expect(existsSync(gitCalls)).toBe(false);
+  return {
+    ...result,
+    calls: existsSync(calls)
+      ? readFileSync(calls, "utf8")
+          .trim()
+          .split("\n")
+          .map((line) => JSON.parse(line))
+      : [],
+    report: existsSync(report)
+      ? JSON.parse(readFileSync(report, "utf8"))
+      : null,
+  };
+}
+describe("verified local npm tarball publication", () => {
+  it.each(["candidate.tgz", "candidate with spaces.tgz"])(
+    "treats %s as a local tarball in a real offline npm publish dry-run",
+    (name) => {
+      const result = publishFixture([name]);
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.calls).toEqual([
+        [
+          "publish",
+          `./artifacts/${name}`,
+          "--ignore-scripts",
+          "--access",
+          "public",
+          "--provenance",
+          "--tag",
+          "latest",
+        ],
+      ]);
+      expect(
+        result.report["@vertica-mcp-release-tests/local-package"],
+      ).toMatchObject({
+        id: "@vertica-mcp-release-tests/local-package@2.0.0",
+      });
+    },
+    15000,
+  );
+  it.each([
+    [[], true, false],
+    [["one.tgz", "two.tgz"], true, false],
+    [["directory.tgz"], true, true],
+    [["wrong-digest.tgz"], false, false],
+  ])(
+    "stops before npm for invalid artifacts %j",
+    (names, validDigest, directoryInstead) => {
+      const result = publishFixture(names, validDigest, directoryInstead);
+      expect(result.status).not.toBe(0);
+      expect(result.calls).toEqual([]);
+    },
+  );
 });

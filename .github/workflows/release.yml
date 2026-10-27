@@ -128,8 +128,15 @@ jobs:
           DIST_TAG: ${{ needs.build.outputs.dist_tag }}
           VALIDATED_SHA256: ${{ inputs.validated_sha256 }}
         run: |
-          printf '%s  %s\n' "$VALIDATED_SHA256" "$(find artifacts -name '*.tgz' -print -quit)" | sha256sum --check
-          npm publish artifacts/*.tgz --ignore-scripts --access public --provenance --tag "$DIST_TAG"
+          shopt -s nullglob
+          release_tarballs=(./artifacts/*.tgz)
+          if [ "${#release_tarballs[@]}" -ne 1 ]; then
+            printf '%s\n' 'Expected exactly one local release tarball' >&2
+            exit 1
+          fi
+          test -f "${release_tarballs[0]}"
+          printf '%s  %s\n' "$VALIDATED_SHA256" "${release_tarballs[0]}" | sha256sum --check
+          npm publish "${release_tarballs[0]}" --ignore-scripts --access public --provenance --tag "$DIST_TAG"
   finalize:
     if: inputs.publish
     needs: publish
