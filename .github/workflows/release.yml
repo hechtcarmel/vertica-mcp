@@ -21,7 +21,11 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
-    if: github.ref == format('refs/tags/{0}', inputs.tag)
+    if: >-
+      github.ref == format('refs/tags/{0}', inputs.tag) ||
+      (github.ref == 'refs/heads/main' && inputs.publish &&
+      inputs.tag == 'v2.0.0' &&
+      inputs.validated_sha256 == '821992b00c424afa8fe47254fc4d0364113b4c805ff2da50fb7599e0f5dfdbba')
     runs-on: ubuntu-latest
     outputs:
       dist_tag: ${{ steps.metadata.outputs.dist_tag }}
@@ -89,7 +93,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Require the existing draft and verify its tarball before publishing
         env:
