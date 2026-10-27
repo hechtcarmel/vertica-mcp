@@ -58,4 +58,6 @@ logs
 *.tgz
 
 # Yarn Integrity file
-.yarn-integrity 
+.yarn-integrity
+# Reproducible candidate/release bundles (never contain connection files)
+artifacts/

@@ -34,7 +34,7 @@ export function determineTableType(flags: {
  */
 export function resolveSchemaName(
   schemaName?: string,
-  defaultSchema?: string
+  defaultSchema?: string,
 ): string {
   return schemaName || defaultSchema || "public";
 }

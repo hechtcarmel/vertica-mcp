@@ -1,5 +1,7 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 import {
+  formatQueryField,
+  safeJsonStringify,
   createSuccessResponse,
   createErrorResponse,
   formatQueryResult,
@@ -246,4 +248,32 @@ describe("response-formatter", () => {
       expect(formatted.constraints).toEqual([]);
     });
   });
+});
+
+describe("JSON wire types", () => {
+  it("serializes bigint without precision loss, dates as ISO, and buffers as base64", () => {
+    const data = {
+      bigint: 9007199254740993n,
+      date: new Date("2026-01-01T00:00:00Z"),
+      bytes: Buffer.from("hello"),
+    };
+    expect(JSON.parse(safeJsonStringify(data))).toEqual({
+      bigint: "9007199254740993",
+      date: "2026-01-01T00:00:00.000Z",
+      bytes: "aGVsbG8=",
+    });
+    expect(JSON.parse(createSuccessResponse(data)).data.bigint).toBe(
+      "9007199254740993",
+    );
+  });
+});
+
+it("reports Vertica types rather than mistaking the wire format for a type", () => {
+  expect(
+    formatQueryField({ name: "id", dataTypeID: 6, format: "text" }),
+  ).toEqual({ name: "id", dataType: "integer", dataTypeId: 6, format: "text" });
+  expect(
+    formatQueryField({ name: "custom", dataTypeID: 999, format: "text" })
+      .dataType,
+  ).toBe("unknown");
 });

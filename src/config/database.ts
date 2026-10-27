@@ -3,18 +3,20 @@ import type { VerticaConfig } from "../types/vertica.js";
 import { DATABASE_CONSTANTS } from "../constants/index.js";
 
 // Custom boolean transform that handles string values correctly
-const booleanFromString = z
-  .union([
-    z.boolean(),
-    z.string().transform((val) => {
-      const lower = val.toLowerCase();
-      if (lower === "true" || lower === "1") return true;
-      if (lower === "false" || lower === "0") return false;
-      throw new Error(`Invalid boolean value: ${val}`);
-    }),
-    z.undefined(),
-  ])
-  .transform((val) => val ?? true); // default to true if undefined
+const booleanFromString = (fallback: boolean) =>
+  z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    switch (value.trim().toLowerCase()) {
+      case "true":
+      case "1":
+        return true;
+      case "false":
+      case "0":
+        return false;
+      default:
+        return value;
+    }
+  }, z.boolean().default(fallback));
 
 // Zod schema for validating configuration
 const ConfigSchema = z.object({
@@ -40,37 +42,39 @@ const ConfigSchema = z.object({
     .min(DATABASE_CONSTANTS.MIN_IDLE_TIMEOUT)
     .max(DATABASE_CONSTANTS.MAX_IDLE_TIMEOUT)
     .default(DATABASE_CONSTANTS.DEFAULT_IDLE_TIMEOUT),
-  ssl: z.coerce.boolean().default(false),
-  sslRejectUnauthorized: z.coerce.boolean().default(true),
-  defaultSchema: z.string().default(DATABASE_CONSTANTS.DEFAULT_SCHEMA),
-  readonlyMode: booleanFromString,
-  connectionLoadBalance: z.coerce.boolean().default(false),
+  ssl: booleanFromString(false),
+  sslRejectUnauthorized: booleanFromString(true),
+  defaultSchema: z.string().min(1).default(DATABASE_CONSTANTS.DEFAULT_SCHEMA),
+  readonlyMode: booleanFromString(true),
+  connectionLoadBalance: booleanFromString(false),
 });
 
 /**
  * Load and validate Vertica database configuration from environment variables
  */
-export function loadDatabaseConfig(): VerticaConfig {
+export function loadDatabaseConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): VerticaConfig {
   const rawConfig = {
-    host: process.env.VERTICA_HOST,
-    port: process.env.VERTICA_PORT,
-    database: process.env.VERTICA_DATABASE,
-    user: process.env.VERTICA_USER,
-    password: process.env.VERTICA_PASSWORD,
-    queryTimeout: process.env.VERTICA_QUERY_TIMEOUT,
-    idleTimeout: process.env.VERTICA_IDLE_TIMEOUT,
-    ssl: process.env.VERTICA_SSL,
-    sslRejectUnauthorized: process.env.VERTICA_SSL_REJECT_UNAUTHORIZED,
-    defaultSchema: process.env.VERTICA_DEFAULT_SCHEMA,
-    readonlyMode: process.env.VERTICA_READONLY_MODE,
-    connectionLoadBalance: process.env.VERTICA_CONNECTION_LOAD_BALANCE,
+    host: env.VERTICA_HOST,
+    port: env.VERTICA_PORT,
+    database: env.VERTICA_DATABASE,
+    user: env.VERTICA_USER,
+    password: env.VERTICA_PASSWORD,
+    queryTimeout: env.VERTICA_QUERY_TIMEOUT,
+    idleTimeout: env.VERTICA_IDLE_TIMEOUT,
+    ssl: env.VERTICA_SSL,
+    sslRejectUnauthorized: env.VERTICA_SSL_REJECT_UNAUTHORIZED,
+    defaultSchema: env.VERTICA_DEFAULT_SCHEMA,
+    readonlyMode: env.VERTICA_READONLY_MODE,
+    connectionLoadBalance: env.VERTICA_CONNECTION_LOAD_BALANCE,
   };
 
   try {
     const validatedConfig = ConfigSchema.parse(rawConfig);
 
     // Only log config details in debug mode
-    if (process.env.DEBUG === "true" || process.env.VERTICA_DEBUG === "true") {
+    if (env.DEBUG === "true" || env.VERTICA_DEBUG === "true") {
       const logConfig = {
         ...validatedConfig,
         password: validatedConfig.password ? "***" : undefined,
@@ -81,10 +85,12 @@ export function loadDatabaseConfig(): VerticaConfig {
     return validatedConfig;
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const missingFields = error.errors
+      const missingFields = error.issues
         .map((err) => `${err.path.join(".")}: ${err.message}`)
         .join(", ");
-      throw new Error(`Invalid database configuration: ${missingFields}`);
+      throw new Error(`Invalid database configuration: ${missingFields}`, {
+        cause: error,
+      });
     }
     throw error;
   }
@@ -99,7 +105,7 @@ export function validateRequiredEnvVars(): void {
 
   if (missing.length > 0) {
     throw new Error(
-      `Missing required environment variables: ${missing.join(", ")}`
+      `Missing required environment variables: ${missing.join(", ")}`,
     );
   }
 }

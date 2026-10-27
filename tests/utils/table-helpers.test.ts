@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 import {
   determineTableType,
   resolveSchemaName,
@@ -10,17 +10,17 @@ describe("table-helpers", () => {
   describe("determineTableType", () => {
     it("should return TEMPORARY TABLE for temp table flag", () => {
       expect(determineTableType({ is_temp_table: "t" })).toBe(
-        "TEMPORARY TABLE"
+        "TEMPORARY TABLE",
       );
       expect(determineTableType({ is_temp_table: true })).toBe(
-        "TEMPORARY TABLE"
+        "TEMPORARY TABLE",
       );
     });
 
     it("should return SYSTEM TABLE for system table flag", () => {
       expect(determineTableType({ is_system_table: "t" })).toBe("SYSTEM TABLE");
       expect(determineTableType({ is_system_table: true })).toBe(
-        "SYSTEM TABLE"
+        "SYSTEM TABLE",
       );
     });
 
@@ -41,7 +41,7 @@ describe("table-helpers", () => {
           is_temp_table: "t",
           is_system_table: "t",
           is_flextable: "t",
-        })
+        }),
       ).toBe("TEMPORARY TABLE");
     });
 
@@ -50,7 +50,7 @@ describe("table-helpers", () => {
         determineTableType({
           is_system_table: "t",
           is_flextable: "t",
-        })
+        }),
       ).toBe("SYSTEM TABLE");
     });
   });
@@ -88,43 +88,43 @@ describe("table-helpers", () => {
 
     it("should reject empty or non-string names", () => {
       expect(() => validateTableName("")).toThrow(
-        "Table name must be a non-empty string"
+        "Table name must be a non-empty string",
       );
-      expect(() => validateTableName(null as any)).toThrow(
-        "Table name must be a non-empty string"
+      expect(() => validateTableName(null as unknown as string)).toThrow(
+        "Table name must be a non-empty string",
       );
-      expect(() => validateTableName(123 as any)).toThrow(
-        "Table name must be a non-empty string"
+      expect(() => validateTableName(123 as unknown as string)).toThrow(
+        "Table name must be a non-empty string",
       );
     });
 
     it("should reject names with whitespace", () => {
       expect(() => validateTableName(" users")).toThrow(
-        "Table name cannot have leading or trailing whitespace"
+        "Table name cannot have leading or trailing whitespace",
       );
       expect(() => validateTableName("users ")).toThrow(
-        "Table name cannot have leading or trailing whitespace"
+        "Table name cannot have leading or trailing whitespace",
       );
       expect(() => validateTableName(" users ")).toThrow(
-        "Table name cannot have leading or trailing whitespace"
+        "Table name cannot have leading or trailing whitespace",
       );
     });
 
     it("should reject invalid SQL identifiers", () => {
       expect(() => validateTableName("123table")).toThrow(
-        "Table name must be a valid SQL identifier"
+        "Table name must be a valid SQL identifier",
       );
       expect(() => validateTableName("user-table")).toThrow(
-        "Table name must be a valid SQL identifier"
+        "Table name must be a valid SQL identifier",
       );
       expect(() => validateTableName("user.table")).toThrow(
-        "Table name must be a valid SQL identifier"
+        "Table name must be a valid SQL identifier",
       );
       expect(() => validateTableName("user@table")).toThrow(
-        "Table name must be a valid SQL identifier"
+        "Table name must be a valid SQL identifier",
       );
       expect(() => validateTableName("user table")).toThrow(
-        "Table name must be a valid SQL identifier"
+        "Table name must be a valid SQL identifier",
       );
     });
   });
@@ -139,37 +139,37 @@ describe("table-helpers", () => {
 
     it("should reject empty or non-string names", () => {
       expect(() => validateSchemaName("")).toThrow(
-        "Schema name must be a non-empty string"
+        "Schema name must be a non-empty string",
       );
-      expect(() => validateSchemaName(null as any)).toThrow(
-        "Schema name must be a non-empty string"
+      expect(() => validateSchemaName(null as unknown as string)).toThrow(
+        "Schema name must be a non-empty string",
       );
-      expect(() => validateSchemaName(undefined as any)).toThrow(
-        "Schema name must be a non-empty string"
+      expect(() => validateSchemaName(undefined as unknown as string)).toThrow(
+        "Schema name must be a non-empty string",
       );
     });
 
     it("should reject names with whitespace", () => {
       expect(() => validateSchemaName(" public")).toThrow(
-        "Schema name cannot have leading or trailing whitespace"
+        "Schema name cannot have leading or trailing whitespace",
       );
       expect(() => validateSchemaName("public ")).toThrow(
-        "Schema name cannot have leading or trailing whitespace"
+        "Schema name cannot have leading or trailing whitespace",
       );
     });
 
     it("should reject invalid SQL identifiers", () => {
       expect(() => validateSchemaName("123schema")).toThrow(
-        "Schema name must be a valid SQL identifier"
+        "Schema name must be a valid SQL identifier",
       );
       expect(() => validateSchemaName("my-schema")).toThrow(
-        "Schema name must be a valid SQL identifier"
+        "Schema name must be a valid SQL identifier",
       );
       expect(() => validateSchemaName("my.schema")).toThrow(
-        "Schema name must be a valid SQL identifier"
+        "Schema name must be a valid SQL identifier",
       );
       expect(() => validateSchemaName("my schema")).toThrow(
-        "Schema name must be a valid SQL identifier"
+        "Schema name must be a valid SQL identifier",
       );
     });
   });
