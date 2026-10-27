@@ -36,6 +36,8 @@ jobs:
         os: [ubuntu-latest]
         node: [20, 22, 24, 26]
         include:
+          - os: ubuntu-latest
+            node: 24.3.0
           - os: windows-latest
             node: 24
     steps:

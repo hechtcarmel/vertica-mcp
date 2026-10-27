@@ -36,6 +36,14 @@
   requested npm OIDC/provenance publication. No account or repository security
   settings are changed.
 
+- Fix the Mac validator entry check for symlinked file/directory paths, including
+  `/tmp` and `/private/tmp`.
+- Add incremental safe stage diagnostics, allowlisted failure categories and
+  static hints without exposing errors, stderr, credentials or result rows.
+  Preserve the original failure if cleanup also fails. The safe-read query set
+  and read-only restrictions are unchanged.
+- Cover the reported Node 24.3.0 runtime in CI.
+
 ### Deliberate behavior corrections
 
 - Read-only mode rejects stacked statements, write-capable CTEs, SELECT INTO,

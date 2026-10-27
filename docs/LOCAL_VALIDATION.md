@@ -77,10 +77,26 @@ node "$VERTICA_VALIDATION_DIR/harness/validate-local.mjs" \
   --env-file "$VERTICA_EXISTING_ENV" --protocol legacy
 ```
 
-The validator refuses to run outside macOS. It checks discovery, read-only
+The validator resolves symlink aliases such as `/tmp` and `/private/tmp`, so either
+spelling runs the same entry point. It refuses to run outside macOS.
+It checks discovery, read-only
 annotations, one-row constant reads, bound parameters, integer precision,
 read-only transaction status, and bounded batching over constant rows. It emits
-only check names and success/failure, never credentials or result rows.
+incremental JSON stage events on stderr and a final success summary on stdout.
+Success requires exit code 0 **and** an `event: "complete"` summary with
+`success: true`; empty output is never a successful validation.
+
+Stages include `initialization`, `connect`, `tool_discovery`, the fixed safe-read
+checks, optional catalog reads, and `shutdown`. Each stage emits `started` followed
+by `passed` or `failed`, so earlier progress remains visible on early failure.
+A failure contains only an allowlisted stage, category, and static hint. Categories
+distinguish local path/access/dependency issues, invalid configuration, connection
+refusal, DNS, timeout, TLS, authentication, read permissions, protocol/database
+compatibility, and unexpected fixed-check results. Raw exception messages/causes,
+child stderr, paths, credentials, and query results are never included in reports.
+Report only the validator's JSON stage/failure events; keep any non-JSON runtime
+warnings and local diagnostic details on the Mac. Do not change TLS, permissions,
+credentials, network access, or server settings to make a check pass.
 
 Optional catalog validation uses only parameterized SELECT statements with LIMIT,
 against a schema/table already selected in the local task:
@@ -108,7 +124,7 @@ Report:
 
 - CI URL, package version, source commit, lockfile digest, and tarball SHA-256.
 - Mac architecture and Node version; protocol(s) tested.
-- Pass/fail check names and optional catalog checks skipped.
+- JSON stage events, failure stage/category if any, and optional catalog checks skipped.
 - Confirmation that only safe bounded reads ran and existing files stayed intact.
 
 Any source, dependency, or packaged-content change requires a new CI artifact and

@@ -131,7 +131,7 @@ describe("dedicated Mac handoff: safe reads only", () => {
     const { client, calls } = clientFixture();
     client.listTools = async () => ({ tools: [] });
     await expect(runReadOnlySmoke(client)).rejects.toThrow(
-      "Refusing database access",
+      "readonly_mode_not_confirmed",
     );
     expect(calls).toHaveLength(0);
   });
