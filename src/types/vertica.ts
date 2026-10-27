@@ -86,6 +86,7 @@ export interface TableInfo {
 export interface StreamQueryOptions {
   batchSize: number;
   maxRows?: number;
+  params?: unknown[];
 }
 
 export interface StreamQueryResult {

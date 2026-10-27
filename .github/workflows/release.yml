@@ -1,0 +1,141 @@
+name: Prepare or publish release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vX.Y.Z tag at the reviewed release commit
+        required: true
+        type: string
+      validated_sha256:
+        description: Tarball SHA-256 accepted after the Mac safe-read validation
+        required: true
+        type: string
+      publish:
+        description: Publish to npm and finalize the existing GitHub draft (separate authorization required)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.ref == format('refs/tags/{0}', inputs.tag)
+    runs-on: ubuntu-latest
+    outputs:
+      dist_tag: ${{ steps.metadata.outputs.dist_tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require the tag commit to be part of the reviewed default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: git merge-base --is-ancestor HEAD "origin/$DEFAULT_BRANCH"
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24.22.1
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test:compatibility
+      - run: pnpm audit --audit-level=high
+      - name: Build exactly the tag and verify the locally accepted bytes
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          VALIDATED_SHA256: ${{ inputs.validated_sha256 }}
+        run: |
+          node scripts/prepare-artifact.mjs --release-tag "$RELEASE_TAG"
+          node scripts/verify-artifact.mjs --sha256 "$VALIDATED_SHA256"
+      - id: metadata
+        name: Select the distribution channel from the validated version
+        run: node --input-type=module -e 'import fs from "node:fs"; const m=JSON.parse(fs.readFileSync("artifacts/manifest.json")); fs.appendFileSync(process.env.GITHUB_OUTPUT, `dist_tag=${m.distTag}\n`);'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: release-bundle
+          path: artifacts/
+          if-no-files-found: error
+  draft:
+    if: ${{ !inputs.publish }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-bundle
+          path: artifacts
+      - name: Create draft with every asset attached
+        if: ${{ !inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          DIST_TAG: ${{ needs.build.outputs.dist_tag }}
+        run: |
+          args=()
+          if [ "$DIST_TAG" = next ]; then args+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" --verify-tag --draft --title "$RELEASE_TAG" \
+            --notes-file artifacts/RELEASE_NOTES.md "${args[@]}" \
+            artifacts/*.tgz artifacts/SHA256SUMS artifacts/manifest.json \
+            artifacts/RELEASE_NOTES.md artifacts/validate-local.mjs artifacts/LOCAL_VALIDATION.md
+  verify_draft:
+    if: inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require the existing draft and verify its tarball before publishing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          VALIDATED_SHA256: ${{ inputs.validated_sha256 }}
+        run: |
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+          mkdir original
+          gh release download "$RELEASE_TAG" --pattern '*.tgz' --dir original
+          printf '%s  %s\n' "$VALIDATED_SHA256" "$(find original -name '*.tgz' -print -quit)" | sha256sum --check
+  publish:
+    if: inputs.publish
+    needs: [build, verify_draft]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-bundle
+          path: artifacts
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24.22.1
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org
+      - name: Publish approved bytes using npm trusted publishing and provenance
+        env:
+          DIST_TAG: ${{ needs.build.outputs.dist_tag }}
+          VALIDATED_SHA256: ${{ inputs.validated_sha256 }}
+        run: |
+          printf '%s  %s\n' "$VALIDATED_SHA256" "$(find artifacts -name '*.tgz' -print -quit)" | sha256sum --check
+          npm publish artifacts/*.tgz --ignore-scripts --access public --provenance --tag "$DIST_TAG"
+  finalize:
+    if: inputs.publish
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the fully populated GitHub draft only after npm succeeds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: gh release edit "$RELEASE_TAG" --draft=false

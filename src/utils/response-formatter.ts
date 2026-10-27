@@ -7,7 +7,13 @@ import type { ApiResponse, BaseError } from "../types/errors.js";
 /**
  * Custom JSON replacer that handles BigInt and other special types
  */
-function jsonReplacer(_key: string, value: unknown): unknown {
+function jsonReplacer(
+  this: Record<string, unknown>,
+  key: string,
+  value: unknown,
+): unknown {
+  const original = this[key];
+  if (Buffer.isBuffer(original)) return original.toString("base64");
   if (typeof value === "bigint") {
     return value.toString();
   }
@@ -37,7 +43,7 @@ export function createSuccessResponse<T>(data: T): string {
     executedAt: new Date().toISOString(),
   };
 
-  return JSON.stringify(response, null, 2);
+  return safeJsonStringify(response, 2);
 }
 
 /**
@@ -60,7 +66,49 @@ export function createErrorResponse(error: BaseError | Error | string): string {
     executedAt: new Date().toISOString(),
   };
 
-  return JSON.stringify(response, null, 2);
+  return safeJsonStringify(response, 2);
+}
+
+// Vertica wire type IDs (v-protocol's VerticaType), not PostgreSQL OIDs.
+const dataTypes: Record<number, string> = {
+  5: "boolean",
+  6: "integer",
+  7: "float",
+  8: "char",
+  9: "varchar",
+  10: "date",
+  11: "time",
+  12: "timestamp",
+  13: "timestamptz",
+  14: "interval",
+  15: "timetz",
+  16: "numeric",
+  17: "varbinary",
+  20: "uuid",
+  114: "interval year to month",
+  115: "long varchar",
+  116: "long varbinary",
+  117: "binary",
+  300: "row",
+  301: "array",
+  302: "map",
+};
+
+export function formatQueryField(field: {
+  name: string;
+  format: string;
+  dataTypeID?: number;
+}) {
+  return {
+    name: field.name,
+    dataType:
+      field.dataTypeID === undefined
+        ? field.format
+        : (dataTypes[field.dataTypeID] ?? "unknown"),
+    ...(field.dataTypeID === undefined
+      ? {}
+      : { dataTypeId: field.dataTypeID, format: field.format }),
+  };
 }
 
 /**
@@ -69,16 +117,13 @@ export function createErrorResponse(error: BaseError | Error | string): string {
 export function formatQueryResult(result: {
   rows: Record<string, unknown>[];
   rowCount: number;
-  fields: { name: string; format: string }[];
+  fields: { name: string; format: string; dataTypeID?: number }[];
   query?: string;
 }) {
   return {
     query: result.query,
     rowCount: result.rowCount,
-    fields: result.fields.map((field) => ({
-      name: field.name,
-      dataType: field.format,
-    })),
+    fields: result.fields.map(formatQueryField),
     rows: result.rows,
   };
 }

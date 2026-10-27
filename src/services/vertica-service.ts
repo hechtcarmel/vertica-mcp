@@ -1,4 +1,6 @@
+import { DATABASE_CONSTANTS as limits } from "../constants/index.js";
 import vertica from "vertica-nodejs";
+import type { Client, ClientConfig } from "vertica-nodejs";
 import type {
   VerticaConfig,
   QueryResult,
@@ -11,230 +13,195 @@ import type {
   StreamQueryOptions,
   StreamQueryResult,
 } from "../types/vertica.js";
-import { READONLY_QUERY_PREFIXES, LOG_MESSAGES } from "../constants/index.js";
 import {
   determineTableType,
   resolveSchemaName,
 } from "../utils/table-helpers.js";
+import { readonlyStatement, singleStatement } from "../utils/sql.js";
 
-type Connection = any;
-
-// Type declaration for vertica-nodejs CommonJS module
-interface VerticaModule {
-  Client: new (config: any) => any;
-  Pool: any;
-  defaults: any;
-  types: any;
-  DatabaseError: any;
-  version: string;
-}
-
-const verticaTyped = vertica as any as VerticaModule;
+export type ClientFactory = (config: ClientConfig) => Client;
 
 export class VerticaService {
-  private config: VerticaConfig;
-  private connection: Connection | null = null;
-  private readonly readonlyQueryPrefixes = READONLY_QUERY_PREFIXES;
-  private readonly readonlyMode: boolean;
+  private connection: Client | null = null;
+  private connecting: Promise<void> | null = null;
+  private queue: Promise<unknown> = Promise.resolve();
 
-  constructor(config: VerticaConfig) {
-    this.config = config;
-    this.readonlyMode = config.readonlyMode ?? true;
+  constructor(
+    private readonly config: VerticaConfig,
+    private readonly createClient: ClientFactory = (options) =>
+      new vertica.Client(options),
+  ) {}
+
+  async connect(): Promise<void> {
+    if (this.connection) return;
+    this.connecting ??= this.open().finally(() => {
+      this.connecting = null;
+    });
+    await this.connecting;
   }
 
-  /**
-   * Establish connection to Vertica database
-   */
-  async connect(): Promise<void> {
-    if (this.connection) {
-      return;
-    }
-
+  private async open(): Promise<void> {
+    const timeout = this.config.queryTimeout ?? limits.DEFAULT_QUERY_TIMEOUT;
+    const client = this.createClient({
+      host: this.config.host,
+      port: this.config.port,
+      database: this.config.database,
+      user: this.config.user,
+      password: this.config.password,
+      connectionTimeoutMillis: timeout,
+      query_timeout: timeout,
+      tls_mode: !this.config.ssl
+        ? "disable"
+        : this.config.sslRejectUnauthorized === false
+          ? "require"
+          : "verify-full",
+      client_label: "vertica-mcp",
+    });
+    // Vertica INTEGER is signed 64-bit. The driver's default parseInt parser
+    // loses precision outside JavaScript's safe range. Override per client.
+    client.setTypeParser(6, "text", (value) => {
+      const parsed = Number(value);
+      return Number.isSafeInteger(parsed) ? parsed : value;
+    });
+    // Driver clients emit errors even while idle. Invalidate instead of crashing
+    // or handing a poisoned client to the next request. Never replay a query.
+    const invalidate = () => {
+      if (this.connection === client) this.connection = null;
+      void client.end().catch(() => {});
+    };
+    client.on("error", invalidate);
+    client.on("end", () => {
+      if (this.connection === client) this.connection = null;
+    });
     try {
-      const clientConfig: any = {
-        host: this.config.host,
-        port: this.config.port,
-        database: this.config.database,
-        user: this.config.user,
-        password: this.config.password,
-        connectionTimeoutMillis: this.config.queryTimeout || 30000,
-      };
-
-      // Add SSL/TLS configuration if specified
-      // Note: vertica-nodejs client uses different SSL configuration than the old vertica package
-      if (this.config.ssl) {
-        clientConfig.ssl = true;
-        if (this.config.sslRejectUnauthorized !== undefined) {
-          clientConfig.ssl = this.config.sslRejectUnauthorized;
-        }
-      } else {
-        // Explicitly disable SSL/TLS for vertica-nodejs client
-        clientConfig.ssl = false;
-      }
-
-      const client = new verticaTyped.Client(clientConfig);
-
       await client.connect();
       this.connection = client;
-
-      console.error(
-        `${LOG_MESSAGES.DB_CONNECTED}: ${this.config.host}:${this.config.port}/${this.config.database}`
-      );
     } catch (error) {
-      throw new Error(
-        `Failed to connect to Vertica: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+      await client.end().catch(() => {});
+      throw new Error(`Failed to connect to Vertica: ${this.message(error)}`, {
+        cause: error,
+      });
     }
   }
 
-  /**
-   * Close database connection
-   */
   async disconnect(): Promise<void> {
-    if (this.connection) {
-      try {
-        await this.connection.end();
-        console.error(LOG_MESSAGES.DB_DISCONNECTED);
-      } catch (error) {
-        console.error(
-          LOG_MESSAGES.DB_CONNECTION_WARNING,
-          error instanceof Error ? error.message : String(error)
-        );
-      } finally {
-        this.connection = null;
-      }
-    }
+    await this.connecting?.catch(() => {});
+    const client = this.connection;
+    this.connection = null;
+    await client?.end().catch(() => {});
   }
 
   getHost(): string {
     return this.config.host;
   }
-
-  /**
-   * Check if connected to database
-   */
   isConnected(): boolean {
     return this.connection !== null;
   }
 
-  /**
-   * Validate that a query is readonly
-   */
-  private validateReadonlyQuery(sql: string): void {
-    // Skip validation if readonly mode is disabled
-    if (!this.readonlyMode) {
-      return;
-    }
-
-    const trimmedSql = sql.trim().toUpperCase();
-    const isReadonly = this.readonlyQueryPrefixes.some((prefix) =>
-      trimmedSql.startsWith(prefix)
-    );
-
-    if (!isReadonly) {
-      throw new Error(
-        `Only readonly queries are allowed (readonly mode is enabled). Query must start with: ${this.readonlyQueryPrefixes.join(
-          ", "
-        )}. To allow all queries, set VERTICA_READONLY_MODE=false.`
-      );
-    }
+  private message(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+    return this.config.password
+      ? message.split(this.config.password).join("[REDACTED]")
+      : message;
   }
 
-  /**
-   * Execute a readonly SQL query
-   */
-  async executeQuery(sql: string, params?: unknown[]): Promise<QueryResult> {
-    this.validateReadonlyQuery(sql);
-    await this.connect();
-
-    if (!this.connection) {
-      throw new Error("Database connection not established");
-    }
-
-    try {
-      const result = await this.connection.query(sql, params);
-
-      return {
-        rows: result.rows || [],
-        rowCount: result.rowCount || 0,
-        fields: result.fields || [],
-        command: result.command || "",
+  async executeQuery(
+    sql: string,
+    params?: unknown[],
+    signal?: AbortSignal,
+  ): Promise<QueryResult> {
+    const statement =
+      this.config.readonlyMode === false
+        ? singleStatement(sql).sql
+        : readonlyStatement(sql);
+    const operation = this.queue.then(async () => {
+      signal?.throwIfAborted();
+      await this.connect();
+      signal?.throwIfAborted();
+      const client = this.connection!;
+      const abort = () => {
+        void this.disconnect();
       };
-    } catch (error) {
-      throw new Error(
-        `Query execution failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
+      signal?.addEventListener("abort", abort, { once: true });
+      const readonly = this.config.readonlyMode !== false;
+      try {
+        if (readonly) await client.query("START TRANSACTION READ ONLY");
+        const result = await client.query(statement, params);
+        if (Array.isArray(result))
+          throw new Error("Multiple query results are not supported");
+        signal?.throwIfAborted();
+        return {
+          rows: result.rows ?? [],
+          rowCount: result.rowCount ?? result.rows?.length ?? 0,
+          fields: result.fields ?? [],
+          command: result.command ?? "",
+        };
+      } catch (error) {
+        // A client-side timeout does not cancel the statement in this driver.
+        // Close it so it cannot keep running or leak transaction state.
+        if (
+          /timeout|connection|closed|socket/i.test(this.message(error)) ||
+          signal?.aborted
+        ) {
+          await this.disconnect();
+        }
+        throw new Error(`Query execution failed: ${this.message(error)}`, {
+          cause: error,
+        });
+      } finally {
+        signal?.removeEventListener("abort", abort);
+        if (readonly && this.connection === client) {
+          try {
+            await client.query("ROLLBACK");
+          } catch {
+            await this.disconnect();
+          }
+        }
+      }
+    });
+    this.queue = operation.catch(() => {});
+    return operation;
   }
 
-  /**
-   * Stream query results in batches
-   */
   async *streamQuery(
     sql: string,
-    options: StreamQueryOptions
+    options: StreamQueryOptions,
+    signal?: AbortSignal,
   ): AsyncGenerator<StreamQueryResult> {
-    this.validateReadonlyQuery(sql);
-    await this.connect();
-
-    if (!this.connection) {
-      throw new Error("Database connection not established");
+    const statement = readonlyStatement(sql, true);
+    const {
+      batchSize,
+      maxRows = limits.DEFAULT_BATCH_SIZE * limits.MAX_BATCHES_LIMIT,
+    } = options;
+    if (
+      !Number.isInteger(batchSize) ||
+      batchSize < 1 ||
+      batchSize > limits.MAX_BATCH_SIZE ||
+      !Number.isInteger(maxRows) ||
+      maxRows < 1 ||
+      maxRows > limits.MAX_STREAM_ROWS
+    ) {
+      throw new Error("Invalid batchSize or maxRows");
     }
-
-    const { batchSize, maxRows } = options;
-    let offset = 0;
-    let batchNumber = 0;
-    let totalFetched = 0;
-
-    // Check if user SQL already contains LIMIT or OFFSET
-    const trimmedSql = sql.trim().toUpperCase();
-    if (trimmedSql.includes(" LIMIT ") || trimmedSql.includes(" OFFSET ")) {
-      throw new Error(
-        "Query should not contain LIMIT or OFFSET clauses when using streamQuery. " +
-        "Use the batchSize and maxRows parameters instead."
-      );
-    }
-
-    try {
-      while (true) {
-        const limitedSql = `${sql} LIMIT ${batchSize} OFFSET ${offset}`;
-        const result = await this.connection.query(limitedSql);
-
-        if (!result.rows || result.rows.length === 0) {
-          break;
-        }
-
-        batchNumber++;
-        totalFetched += result.rows.length;
-
-        const hasMore =
-          result.rows.length === batchSize &&
-          (!maxRows || totalFetched < maxRows);
-
-        yield {
-          batch: result.rows,
-          batchNumber,
-          totalBatches: hasMore ? batchNumber + 1 : batchNumber,
-          hasMore,
-          fields: result.fields || [],
-        };
-
-        if (!hasMore || (maxRows && totalFetched >= maxRows)) {
-          break;
-        }
-
-        offset += batchSize;
-      }
-    } catch (error) {
-      throw new Error(
-        `Stream query failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+    // One execution preserves query semantics and accepts existing LIMIT/OFFSET.
+    // The extra row distinguishes an exact boundary from a truncated result.
+    const result = await this.executeQuery(
+      `SELECT * FROM (\n${statement}\n) AS mcp_result LIMIT ${maxRows + 1}`,
+      options.params,
+      signal,
+    );
+    const rows = result.rows.slice(0, maxRows);
+    const totalBatches = Math.ceil(rows.length / batchSize);
+    for (let offset = 0; offset < rows.length; offset += batchSize) {
+      signal?.throwIfAborted();
+      const end = Math.min(offset + batchSize, rows.length);
+      yield {
+        batch: rows.slice(offset, end),
+        batchNumber: Math.floor(offset / batchSize) + 1,
+        totalBatches,
+        hasMore: end < result.rows.length,
+        fields: result.fields,
+      };
     }
   }
 
@@ -243,7 +210,8 @@ export class VerticaService {
    */
   async getTableStructure(
     tableName: string,
-    schemaName?: string
+    schemaName?: string,
+    signal?: AbortSignal,
   ): Promise<TableStructure> {
     const schema = resolveSchemaName(schemaName, this.config.defaultSchema);
 
@@ -263,15 +231,19 @@ export class VerticaService {
       ORDER BY ordinal_position
     `;
 
-    const columnsResult = await this.executeQuery(columnsQuery, [
-      schema,
-      tableName,
-    ]);
+    const columnsResult = await this.executeQuery(
+      columnsQuery,
+      [schema, tableName],
+      signal,
+    );
 
     const columns: ColumnInfo[] = columnsResult.rows.map((row) => ({
       columnName: row.column_name as string,
       dataType: row.data_type as string,
-      isNullable: row.is_nullable === "YES",
+      isNullable:
+        row.is_nullable === true ||
+        row.is_nullable === "t" ||
+        row.is_nullable === "YES",
       defaultValue: row.column_default as string | undefined,
       columnSize: row.character_maximum_length as number | undefined,
       decimalDigits: row.numeric_scale as number | undefined,
@@ -289,10 +261,11 @@ export class VerticaService {
       WHERE table_schema = ? AND table_name = ?
     `;
 
-    const tableResult = await this.executeQuery(tableQuery, [
-      schema,
-      tableName,
-    ]);
+    const tableResult = await this.executeQuery(
+      tableQuery,
+      [schema, tableName],
+      signal,
+    );
 
     if (tableResult.rows.length === 0) {
       throw new Error(`Table ${schema}.${tableName} not found`);
@@ -306,8 +279,25 @@ export class VerticaService {
       is_flextable: tableInfo.is_flextable as string | boolean,
     });
 
-    // Get constraints (simplified - Vertica has different constraint system)
-    const constraints: ConstraintInfo[] = [];
+    // Read column constraints, including foreign-key references.
+    const constraintResult = await this.executeQuery(
+      `
+      SELECT constraint_name, constraint_type, column_name,
+             reference_table_name, reference_column_name
+      FROM v_catalog.constraint_columns
+      WHERE table_schema = ? AND table_name = ?
+      ORDER BY constraint_name, column_name
+    `,
+      [schema, tableName],
+      signal,
+    );
+    const constraints: ConstraintInfo[] = constraintResult.rows.map((row) => ({
+      constraintName: row.constraint_name as string,
+      constraintType: row.constraint_type as string,
+      columnName: row.column_name as string,
+      referencedTable: row.reference_table_name as string | undefined,
+      referencedColumn: row.reference_column_name as string | undefined,
+    }));
 
     return {
       schemaName: schema,
@@ -322,7 +312,10 @@ export class VerticaService {
   /**
    * List all tables in a schema
    */
-  async listTables(schemaName?: string): Promise<TableInfo[]> {
+  async listTables(
+    schemaName?: string,
+    signal?: AbortSignal,
+  ): Promise<TableInfo[]> {
     const schema = resolveSchemaName(schemaName, this.config.defaultSchema);
 
     const query = `
@@ -338,7 +331,7 @@ export class VerticaService {
       ORDER BY table_name
     `;
 
-    const result = await this.executeQuery(query, [schema]);
+    const result = await this.executeQuery(query, [schema], signal);
 
     return result.rows.map((row) => {
       const tableType = determineTableType({
@@ -359,7 +352,10 @@ export class VerticaService {
   /**
    * List all views in a schema
    */
-  async listViews(schemaName?: string): Promise<ViewInfo[]> {
+  async listViews(
+    schemaName?: string,
+    signal?: AbortSignal,
+  ): Promise<ViewInfo[]> {
     const schema = resolveSchemaName(schemaName, this.config.defaultSchema);
 
     const query = `
@@ -373,7 +369,7 @@ export class VerticaService {
       ORDER BY table_name
     `;
 
-    const result = await this.executeQuery(query, [schema]);
+    const result = await this.executeQuery(query, [schema], signal);
 
     return result.rows.map((row) => ({
       schemaName: row.table_schema as string,
@@ -388,7 +384,8 @@ export class VerticaService {
    */
   async listIndexes(
     tableName: string,
-    schemaName?: string
+    schemaName?: string,
+    signal?: AbortSignal,
   ): Promise<IndexInfo[]> {
     const schema = resolveSchemaName(schemaName, this.config.defaultSchema);
 
@@ -403,11 +400,12 @@ export class VerticaService {
         pc.sort_position
       FROM v_catalog.projection_columns pc
       JOIN v_catalog.projections p ON pc.projection_id = p.projection_id
-      WHERE p.projection_schema = ? AND p.anchor_table_name = ?
+      JOIN v_catalog.tables t ON p.anchor_table_id = t.table_id
+      WHERE t.table_schema = ? AND p.anchor_table_name = ?
       ORDER BY p.projection_name, pc.sort_position
     `;
 
-    const result = await this.executeQuery(query, [schema, tableName]);
+    const result = await this.executeQuery(query, [schema, tableName], signal);
 
     return result.rows.map((row) => ({
       indexName: row.index_name as string,

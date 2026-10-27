@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      development:
+        dependency-type: development
+      mcp:
+        patterns: ["@modelcontextprotocol/*", "zod"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -1,130 +1,112 @@
+import { DATABASE_CONSTANTS } from "../constants/index.js";
 import { VerticaService } from "./vertica-service.js";
-import { getDatabaseConfig } from "../config/database.js";
-import { LOG_MESSAGES } from "../constants/index.js";
 import type { VerticaConfig } from "../types/vertica.js";
+import { isIP } from "node:net";
 
-// Connection manager that holds a VerticaService instance and disconnects after idle timeout
+type ServiceFactory = (config: VerticaConfig) => VerticaService;
+
+/** Owns a lazy connection and leases it for the entire tool operation. */
 export class ConnectionManager {
-  private static instance: ConnectionManager;
   private service: VerticaService | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
-  private connecting: Promise<void> | null = null;
-  private config = getDatabaseConfig();
+  private queue: Promise<unknown> = Promise.resolve();
+  private closed = false;
 
-  private constructor() {}
+  constructor(
+    private readonly config: VerticaConfig,
+    private readonly createService: ServiceFactory = (options) =>
+      new VerticaService(options),
+  ) {}
 
-  static getInstance(): ConnectionManager {
-    if (!ConnectionManager.instance) {
-      ConnectionManager.instance = new ConnectionManager();
-    }
-    return ConnectionManager.instance;
-  }
-
-  // Establish connection on first use, with optional load balance routing
-  async getConnection(): Promise<VerticaService> {
-    if (!this.service) {
-      // Prevent concurrent connection attempts
-      if (!this.connecting) {
-        this.connecting = this._connect().finally(() => {
-          this.connecting = null;
-        });
+  withConnection<T>(
+    operation: (service: VerticaService) => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    const run = this.queue.then(async () => {
+      if (this.closed) throw new Error("Connection manager is closed");
+      signal?.throwIfAborted();
+      this.clearIdleTimer();
+      try {
+        if (!this.service?.isConnected()) {
+          await this.service?.disconnect();
+          const candidate = this.createService(this.config);
+          try {
+            await candidate.connect();
+          } catch (error) {
+            await candidate.disconnect();
+            throw error;
+          }
+          this.service = candidate;
+          if (this.config.connectionLoadBalance)
+            await this.applyLoadBalance(candidate);
+        }
+        if (this.closed) throw new Error("Connection manager is closed");
+        signal?.throwIfAborted();
+        return await operation(this.service!);
+      } finally {
+        if (!this.closed) {
+          this.idleTimer = setTimeout(() => {
+            this.idleTimer = null;
+            // Queue disconnect behind any request that acquired the lease first.
+            const close = this.queue.then(async () => {
+              const service = this.service;
+              this.service = null;
+              await service?.disconnect();
+            });
+            this.queue = close.catch(() => {});
+          }, this.config.idleTimeout ?? DATABASE_CONSTANTS.DEFAULT_IDLE_TIMEOUT);
+          this.idleTimer.unref();
+        }
       }
-      await this.connecting;
-    }
-
-    this.resetIdleTimer();
-    return this.service!;
+    });
+    this.queue = run.catch(() => {});
+    return run;
   }
 
-  private async _connect(): Promise<void> {
-    this.service = new VerticaService(this.config);
-    await this.service.connect();
-
-    if (this.config.connectionLoadBalance) {
-      await this._applyLoadBalance(this.config);
-    }
-  }
-
-  // Resolve target host via DESCRIBE_LOAD_BALANCE_DECISION, reconnect if different
-  private async _applyLoadBalance(config: VerticaConfig): Promise<void> {
+  private async applyLoadBalance(service: VerticaService): Promise<void> {
+    let redirected: VerticaService | undefined;
     try {
-      const service = this.service!;
-
-      // Get client IP from current session
       const ipResult = await service.executeQuery(
-        "SELECT SPLIT_PART(CLIENT_HOSTNAME, ':', 1) AS client_ip FROM V_MONITOR.CURRENT_SESSION"
+        "SELECT CLIENT_HOSTNAME AS client_ip FROM V_MONITOR.CURRENT_SESSION",
       );
-      const clientIp = ipResult.rows[0]?.client_ip as string | undefined;
-      if (!clientIp) throw new Error("Could not determine client IP from current session");
-
-      // Get load balance decision for that IP
-      const lbResult = await service.executeQuery(
-        `SELECT DESCRIBE_LOAD_BALANCE_DECISION('${clientIp}') AS lb_decision`
+      const rawIp = String(ipResult.rows[0]?.client_ip ?? "");
+      const clientIp = isIP(rawIp)
+        ? rawIp
+        : rawIp.replace(/^\[|\](?::\d+)?$|:\d+$/g, "");
+      if (!isIP(clientIp)) throw new Error("Could not determine client IP");
+      const decision = await service.executeQuery(
+        "SELECT DESCRIBE_LOAD_BALANCE_DECISION(?) AS lb_decision",
+        [clientIp],
       );
-      const lbOutput = lbResult.rows[0]?.lb_decision as string | undefined;
-      if (!lbOutput) throw new Error("Empty load balance decision response");
-
-      const match = lbOutput.match(/Load balance redirect to: \[([^\]]+)\]/);
-      if (!match) throw new Error(`Unexpected load balance response: ${lbOutput}`);
-
-      const redirectIp = match[1]!;
-      if (redirectIp === service.getHost()) {
-        console.error(LOG_MESSAGES.DB_LOAD_BALANCE_SAME);
-        return;
-      }
-
-      console.error(`${LOG_MESSAGES.DB_LOAD_BALANCE_ROUTING} ${service.getHost()} → ${redirectIp}`);
-
-      // Connect to the target node first, then close the original
-      const redirectConfig = { ...config, host: redirectIp };
-      const redirected = new VerticaService(redirectConfig);
+      const host = String(decision.rows[0]?.lb_decision ?? "").match(
+        /Load balance redirect to: \[([^\]]+)\]/,
+      )?.[1];
+      if (!host || !isIP(host))
+        throw new Error("No valid load balance redirect");
+      if (host === service.getHost()) return;
+      redirected = this.createService({ ...this.config, host });
       await redirected.connect();
-
-      await service.disconnect();
       this.service = redirected;
-    } catch (error) {
-      // Keep existing connection on initial host - no rethrow
-      console.error(
-        LOG_MESSAGES.DB_LOAD_BALANCE_SKIP,
-        error instanceof Error ? error.message : String(error)
-      );
+      await service.disconnect();
+    } catch {
+      await redirected?.disconnect();
+      console.error("Load balance routing unavailable; using the initial host");
     }
   }
 
-  // Restart the idle timer on every use
-  private resetIdleTimer(): void {
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
-    }
-
-    this.idleTimer = setTimeout(() => {
-      this.handleIdleTimeout().catch((error) => {
-        console.error(
-          "Error during idle disconnect:",
-          error instanceof Error ? error.message : String(error)
-        );
-      });
-    }, this.config.idleTimeout!);
-  }
-
-  private async handleIdleTimeout(): Promise<void> {
+  private clearIdleTimer(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = null;
-    if (this.service) {
-      console.error(LOG_MESSAGES.DB_IDLE_TIMEOUT);
-      await this.service.disconnect();
-      this.service = null;
-    }
   }
 
-  // Cancel pending idle timer and close the connection
   async disconnect(): Promise<void> {
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
-      this.idleTimer = null;
-    }
-    if (this.service) {
-      await this.service.disconnect();
-      this.service = null;
-    }
+    this.closed = true;
+    this.clearIdleTimer();
+    // Interrupt in-flight driver work, then wait for its lease to settle.
+    await this.service?.disconnect();
+    await this.queue;
+    const service = this.service;
+    this.service = null;
+    await service?.disconnect();
   }
 }
