@@ -37,8 +37,17 @@ describe.skipIf(!enabled)("Vertica test database (read-only)", () => {
     ).toBe("9223372036854775807");
   });
   it("enforces a real read-only transaction", async () => {
-    const response = await service.executeQuery("SHOW TRANSACTION_READ_ONLY");
-    expect(String(response.rows[0]?.setting).toLowerCase()).toBe("true");
+    const probe = await service.executeQuery(
+      "SELECT CURRENT_TRANS_ID()::VARCHAR AS transaction_id LIMIT 1",
+    );
+    expect(probe.rows).toHaveLength(1);
+    const id = probe.rows[0]?.transaction_id;
+    expect(typeof id).toBe("string");
+    const response = await service.executeQuery(
+      "SELECT is_read_only FROM v_monitor.transactions WHERE transaction_id = ?::INT AND session_id = CURRENT_SESSION() AND is_initiator LIMIT 2",
+      [id],
+    );
+    expect(response.rows).toEqual([{ is_read_only: true }]);
   });
   it("reads catalog views without writes", async () => {
     expect(Array.isArray(await service.listTables())).toBe(true);

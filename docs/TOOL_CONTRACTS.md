@@ -46,8 +46,10 @@ writes are explicitly enabled. This metadata separates configuration from a puri
 claim. Neither metadata nor annotations replace least-privilege database grants.
 
 The dedicated Mac validator forces read-only mode, requires true configuration
-metadata for both SQL tools plus read-only catalog hints, and reads the actual
-transaction status using its existing fixed safe query. Its query set is unchanged.
+metadata for both SQL tools plus read-only catalog hints, and confirms the actual
+completed probe transaction using two bounded reads before all other database
+checks. This replaces the session-default SHOW check; see the exact queries and
+failure rules in [the Mac handoff](LOCAL_VALIDATION.md).
 No mutation, rejection, mock, or aggregate suite belongs in real Mac validation.
 
 ## Official references and validation

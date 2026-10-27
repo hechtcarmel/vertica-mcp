@@ -101,8 +101,10 @@ function clientFixture() {
       else if (sql.includes("bound_value")) data.rows = [{ bound_value: 42 }];
       else if (sql.includes("big_value"))
         data.rows = [{ big_value: "9223372036854775807" }];
-      else if (sql === "SHOW TRANSACTION_READ_ONLY")
-        data.rows = [{ setting: "true" }];
+      else if (sql.includes("CURRENT_TRANS_ID()::VARCHAR"))
+        data.rows = [{ transaction_id: "45035996273705927" }];
+      else if (sql.includes("FROM v_monitor.transactions"))
+        data.rows = [{ is_read_only: true }];
       else if (request.name === "stream_query")
         data = { totalRows: 2, truncated: true };
       else if (sql.includes("FROM v_catalog.tables"))
@@ -126,10 +128,10 @@ describe("dedicated Mac handoff: safe reads only", () => {
       ),
     ).toBe(true);
     for (const { name, arguments: args } of calls) {
-      expect(args.sql).toMatch(/^(SELECT\b|SHOW TRANSACTION_READ_ONLY$)/);
+      expect(args.sql).toMatch(/^SELECT\b/);
       expect(args.sql).not.toContain(";");
-      if (name === "execute_query" && args.sql !== "SHOW TRANSACTION_READ_ONLY")
-        expect(args.sql).toMatch(/LIMIT (1|5|10)$/);
+      if (name === "execute_query")
+        expect(args.sql).toMatch(/LIMIT (1|2|5|10)$/);
       if (name === "stream_query") expect(args.maxRows).toBe(2);
     }
     expect(

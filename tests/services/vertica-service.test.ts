@@ -76,6 +76,49 @@ describe("Vertica driver boundary", () => {
     ]);
     await service.disconnect();
   });
+  it("makes the completed probe transaction available before a later status read", async () => {
+    const { service, client } = setup();
+    let nextId = 45035996273705927n;
+    let activeId: string | undefined;
+    const completed = new Map<string, boolean>();
+    client.query.mockImplementation(async (sql, params) => {
+      if (sql === "START TRANSACTION READ ONLY") {
+        activeId = String(nextId++);
+        return result();
+      }
+      if (sql === "ROLLBACK") {
+        completed.set(activeId!, true);
+        activeId = undefined;
+        return result();
+      }
+      if (sql.includes("CURRENT_TRANS_ID()::VARCHAR"))
+        return result([{ transaction_id: activeId }]);
+      if (sql.includes("FROM v_monitor.transactions")) {
+        expect(params).toEqual(["45035996273705927"]);
+        expect(activeId).toBe("45035996273705928");
+        return result([{ is_read_only: completed.get(String(params?.[0])) }]);
+      }
+      throw new Error("Unexpected probe SQL");
+    });
+    const probe = await service.executeQuery(
+      "SELECT CURRENT_TRANS_ID()::VARCHAR AS transaction_id LIMIT 1",
+    );
+    expect(activeId).toBeUndefined();
+    const status = await service.executeQuery(
+      "SELECT is_read_only FROM v_monitor.transactions WHERE transaction_id = ?::INT AND session_id = CURRENT_SESSION() AND is_initiator LIMIT 2",
+      [probe.rows[0]!.transaction_id],
+    );
+    expect(status.rows).toEqual([{ is_read_only: true }]);
+    expect(client.query.mock.calls.map(([sql]) => sql)).toEqual([
+      "START TRANSACTION READ ONLY",
+      "SELECT CURRENT_TRANS_ID()::VARCHAR AS transaction_id LIMIT 1",
+      "ROLLBACK",
+      "START TRANSACTION READ ONLY",
+      "SELECT is_read_only FROM v_monitor.transactions WHERE transaction_id = ?::INT AND session_id = CURRENT_SESSION() AND is_initiator LIMIT 2",
+      "ROLLBACK",
+    ]);
+    await service.disconnect();
+  });
   it("blocks unsafe SQL without connecting", async () => {
     const { service, factory } = setup();
     await expect(

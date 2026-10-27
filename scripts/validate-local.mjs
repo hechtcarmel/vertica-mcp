@@ -37,6 +37,10 @@ const hints = {
     "The candidate exited or closed its transport. Check the isolated installation locally; do not upload server stderr.",
   readonly_mode_not_confirmed:
     "Read-only mode was not confirmed. Stop validation without changing the existing profile.",
+  readonly_status_unavailable:
+    "The completed probe transaction has no unambiguous status record. Stop; do not change monitoring settings or permissions.",
+  readonly_transaction_not_readonly:
+    "The probe transaction was not read-only. Stop; report this category without changing the existing profile or database settings.",
   invalid_response:
     "The candidate returned an invalid MCP/tool response. Report this category and stage without the payload.",
   unexpected_result:
@@ -259,17 +263,62 @@ export async function runReadOnlySmoke(client, options = {}) {
           stage,
         );
         if (verify && !verify(result))
-          throw new ValidationFailure(
-            stage,
-            stage === "readonly_status"
-              ? "readonly_mode_not_confirmed"
-              : "unexpected_result",
-          );
+          throw new ValidationFailure(stage, "unexpected_result");
         if (check) checks.push(check);
         return result;
       },
       options,
     );
+  await atStage(
+    "readonly_status",
+    async () => {
+      const execute = async (args) =>
+        content(
+          await client.callTool(
+            { name: "execute_query", arguments: args },
+            { timeout: 30000 },
+          ),
+          "readonly_status",
+        );
+      // SHOW TRANSACTION_READ_ONLY reports the session default, not the mode
+      // requested by START TRANSACTION READ ONLY. Record this probe's ID; the
+      // server rolls it back before responding, making its transaction record
+      // available for the next bounded read. Never change session settings.
+      const probe = await execute({
+        sql: "SELECT CURRENT_TRANS_ID()::VARCHAR AS transaction_id LIMIT 1",
+      });
+      const id = probe.rows?.[0]?.transaction_id;
+      if (
+        probe.rows?.length !== 1 ||
+        typeof id !== "string" ||
+        !/^[1-9][0-9]{0,18}$/.test(id) ||
+        BigInt(id) > 9223372036854775807n
+      ) {
+        throw new ValidationFailure("readonly_status", "invalid_response");
+      }
+      const status = await execute({
+        sql: "SELECT is_read_only FROM v_monitor.transactions WHERE transaction_id = ?::INT AND session_id = CURRENT_SESSION() AND is_initiator LIMIT 2",
+        params: [id],
+      });
+      if (
+        status.rows?.length !== 1 ||
+        typeof status.rows[0]?.is_read_only !== "boolean"
+      ) {
+        throw new ValidationFailure(
+          "readonly_status",
+          "readonly_status_unavailable",
+        );
+      }
+      if (status.rows[0].is_read_only !== true) {
+        throw new ValidationFailure(
+          "readonly_status",
+          "readonly_transaction_not_readonly",
+        );
+      }
+      checks.push("completed read-only probe transaction confirmed");
+    },
+    options,
+  );
   await read(
     "constant_read",
     "execute_query",
@@ -290,13 +339,6 @@ export async function runReadOnlySmoke(client, options = {}) {
     { sql: "SELECT 9223372036854775807::INT AS big_value LIMIT 1" },
     (result) => result.rows?.[0]?.big_value === "9223372036854775807",
     "lossless integer read",
-  );
-  await read(
-    "readonly_status",
-    "execute_query",
-    { sql: "SHOW TRANSACTION_READ_ONLY" },
-    (result) => String(result.rows?.[0]?.setting).toLowerCase() === "true",
-    "read-only transaction status read",
   );
   await read(
     "bounded_batching",

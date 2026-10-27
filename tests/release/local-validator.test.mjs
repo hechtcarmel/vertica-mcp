@@ -55,7 +55,11 @@ function fixture() {
           ? [{ bound_value: 42 }]
           : sql.includes("big_value")
             ? [{ big_value: "9223372036854775807" }]
-            : [{ setting: "true" }];
+            : sql.includes("CURRENT_TRANS_ID()::VARCHAR")
+              ? [{ transaction_id: "45035996273705927" }]
+              : sql.includes("FROM v_monitor.transactions")
+                ? [{ is_read_only: true }]
+                : [];
       return {
         structuredContent: {
           success: true,
@@ -176,6 +180,129 @@ describe("safe incremental diagnostics", () => {
     );
     expect(client.callTool).not.toHaveBeenCalled();
   });
+  it("confirms the completed transaction before all other reads, independent of the session default", async () => {
+    const client = fixture();
+    const original = client.callTool.getMockImplementation();
+    client.callTool.mockImplementation(async (request) => {
+      // A session default of false does not describe START TRANSACTION READ ONLY.
+      if (request.arguments.sql.startsWith("SHOW"))
+        return {
+          structuredContent: { success: true, rows: [{ setting: "false" }] },
+        };
+      return original(request);
+    });
+    const events = [];
+    await validateSession(
+      client,
+      {},
+      {
+        catalogs: true,
+        schemaName: "existing schema",
+        onStage: (event) => events.push(event),
+      },
+    );
+    const requests = client.callTool.mock.calls.map(([request]) => request);
+    expect(requests.slice(0, 2)).toEqual([
+      {
+        name: "execute_query",
+        arguments: {
+          sql: "SELECT CURRENT_TRANS_ID()::VARCHAR AS transaction_id LIMIT 1",
+        },
+      },
+      {
+        name: "execute_query",
+        arguments: {
+          sql: "SELECT is_read_only FROM v_monitor.transactions WHERE transaction_id = ?::INT AND session_id = CURRENT_SESSION() AND is_initiator LIMIT 2",
+          params: ["45035996273705927"],
+        },
+      },
+    ]);
+    expect(
+      requests.some(({ arguments: args }) => args.sql.startsWith("SHOW")),
+    ).toBe(false);
+    expect(
+      events
+        .filter(({ status }) => status === "passed")
+        .map(({ stage }) => stage)
+        .slice(0, 4),
+    ).toEqual([
+      "connect",
+      "tool_discovery",
+      "readonly_status",
+      "constant_read",
+    ]);
+  });
+  it.each([
+    [[{ is_read_only: false }], "readonly_transaction_not_readonly"],
+    [[], "readonly_status_unavailable"],
+    [
+      [{ is_read_only: true }, { is_read_only: false }],
+      "readonly_status_unavailable",
+    ],
+    [[{ is_read_only: "true" }], "readonly_status_unavailable"],
+    [
+      [{ setting: "true", secret: privateMarker }],
+      "readonly_status_unavailable",
+    ],
+    [[{ is_read_only: null }], "readonly_status_unavailable"],
+  ])(
+    "stops before any other live checks when transaction status is %j",
+    async (rows, category) => {
+      const client = fixture();
+      client.callTool
+        .mockResolvedValueOnce({
+          structuredContent: {
+            success: true,
+            rows: [{ transaction_id: "45035996273705927" }],
+          },
+        })
+        .mockResolvedValueOnce({ structuredContent: { success: true, rows } });
+      const events = [];
+      await expect(
+        validateSession(
+          client,
+          {},
+          {
+            catalogs: true,
+            schemaName: "existing schema",
+            onStage: (event) => events.push(event),
+          },
+        ),
+      ).rejects.toThrow(`readonly_status: ${category}`);
+      expect(client.callTool).toHaveBeenCalledTimes(2);
+      expect(
+        events
+          .filter(({ status }) => status === "started")
+          .map(({ stage }) => stage),
+      ).toEqual(["connect", "tool_discovery", "readonly_status", "shutdown"]);
+      expect(JSON.stringify(events)).not.toContain(privateMarker);
+      expect(client.close).toHaveBeenCalledOnce();
+    },
+  );
+  it.each(
+    [
+      [],
+      [{ transaction_id: "1" }, { transaction_id: "2" }],
+      [{ transaction_id: 42 }],
+      [{ transaction_id: privateMarker }],
+      [{ transaction_id: "0" }],
+      [{ transaction_id: "9223372036854775808" }],
+      [{ transaction_id: null }],
+    ].map((rows) => [rows]),
+  )(
+    "stops on an invalid probe ID response %j without issuing the status query",
+    async (rows) => {
+      const client = fixture();
+      client.callTool.mockResolvedValueOnce({
+        structuredContent: { success: true, rows },
+      });
+      await expect(validateSession(client, {})).rejects.toThrow(
+        "readonly_status: invalid_response",
+      );
+      expect(client.callTool).toHaveBeenCalledOnce();
+      expect(client.close).toHaveBeenCalledOnce();
+    },
+  );
   it("emits the started stage while the operation is still pending", async () => {
     const client = fixture();
     const events = [];
@@ -214,7 +341,7 @@ describe("safe incremental diagnostics", () => {
     });
     await expect(
       validateSession(client, {}, { onStage: (event) => events.push(event) }),
-    ).rejects.toThrow("constant_read: authentication");
+    ).rejects.toThrow("readonly_status: authentication");
     expect(events).toContainEqual({
       event: "stage",
       stage: "connect",
@@ -227,7 +354,7 @@ describe("safe incremental diagnostics", () => {
     });
     expect(events).toContainEqual(
       expect.objectContaining({
-        stage: "constant_read",
+        stage: "readonly_status",
         status: "failed",
         category: "authentication",
       }),
@@ -264,7 +391,7 @@ describe("safe incremental diagnostics", () => {
         validateSession(client, {}, { onStage: (event) => events.push(event) }),
       ).rejects.toBeInstanceOf(ValidationFailure);
       expect(events).toContainEqual(
-        expect.objectContaining({ stage: "constant_read", status: "failed" }),
+        expect.objectContaining({ stage: "readonly_status", status: "failed" }),
       );
       expect(JSON.stringify(events)).not.toContain(privateMarker);
       expect(client.close).toHaveBeenCalledOnce();
@@ -300,7 +427,7 @@ describe("safe incremental diagnostics", () => {
     client.close.mockRejectedValue(new Error(privateMarker));
     await expect(
       validateSession(client, {}, { onStage: (event) => events.push(event) }),
-    ).rejects.toThrow("constant_read: database_permission");
+    ).rejects.toThrow("readonly_status: database_permission");
     expect(events.at(-1)).toMatchObject({
       stage: "shutdown",
       status: "failed",

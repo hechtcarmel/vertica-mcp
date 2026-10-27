@@ -40,9 +40,13 @@
   `/tmp` and `/private/tmp`.
 - Add incremental safe stage diagnostics, allowlisted failure categories and
   static hints without exposing errors, stderr, credentials or result rows.
-  Preserve the original failure if cleanup also fails. The safe-read query set
-  and read-only restrictions are unchanged.
+  Preserve the original failure if cleanup also fails.
 - Cover the reported Node 24.3.0 runtime in CI.
+- Correct the Mac read-only confirmation scope: replace the session-default SHOW
+  assertion with two bounded reads of the completed probe's actual transaction
+  record. Require exactly one native true status before all other database checks;
+  stop on false, missing, ambiguous, or malformed status without changing any
+  session/server settings or permissions. Read-only restrictions remain intact.
 
 - Review all six tool contracts against the implementation and current MCP docs:
   concise selection guidance, named inputs and limits, typed success/error output
