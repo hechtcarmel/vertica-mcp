@@ -79,12 +79,20 @@ node "$VERTICA_VALIDATION_DIR/harness/validate-local.mjs" \
 
 The validator resolves symlink aliases such as `/tmp` and `/private/tmp`, so either
 spelling runs the same entry point. It refuses to run outside macOS.
-It checks discovery, read-only
-annotations, one-row constant reads, bound parameters, integer precision,
+It checks the exact tool set, fixed catalog read-only hints, explicit query
+read-only transaction configuration, one-row constant reads, bound parameters, integer precision,
 read-only transaction status, and bounded batching over constant rows. It emits
 incremental JSON stage events on stderr and a final success summary on stdout.
 Success requires exit code 0 **and** an `event: "complete"` summary with
 `success: true`; empty output is never a successful validation.
+
+Arbitrary-SQL tools intentionally use conservative annotations because database
+functions can have side effects. Their `readOnlyHint: false` does **not** disable
+the read-only policy. Discovery must instead confirm
+`_meta["com.hechtcarmel.vertica/readOnlyTransaction"]: true` for both SQL tools;
+the validator then checks the actual transaction status with the existing fixed
+read. It must stop if configuration metadata is absent/false. Do not bypass this
+check or broaden the queries.
 
 Stages include `initialization`, `connect`, `tool_discovery`, the fixed safe-read
 checks, optional catalog reads, and `shutdown`. Each stage emits `started` followed

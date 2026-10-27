@@ -40,7 +40,9 @@ or modify data, schemas, permissions, or server settings for validation.
 ## Architecture and compatibility
 
 - `src/index.ts`: CLI, quiet environment loading, stdio lifecycle, bounded shutdown.
-- `src/server.ts`: SDK registration, schemas, annotations, response envelopes.
+- `src/server.ts`: SDK handlers and response envelopes.
+- `src/tools/contracts.ts`: tool selection descriptions, strict inputs, typed
+  success/error outputs, annotations and configuration metadata.
 - `src/services/connection-manager.ts`: lazy connection leases, idle cleanup,
   optional load balancing, shutdown. One manager belongs to one server.
 - `src/services/vertica-service.ts`: typed driver boundary, query serialization,
@@ -51,6 +53,9 @@ Keep the six existing tool names, argument names, JSON text envelopes, CLI alias
 and documented environment settings. New output fields should be additive. Changes
 to intentional safety restrictions belong in `CHANGELOG.md` and the README. Tests
 must exercise the behavior at the driver boundary and through an MCP client.
+Review descriptions, parameters, limits, output schemas and annotations together;
+see [tool contracts](docs/TOOL_CONTRACTS.md). Never use a read-only annotation as
+a purity claim for arbitrary database functions.
 
 The server uses current stable MCP SDK v2 and its `serveStdio` factory entry point,
 which supports MCP 2026-07-28 as well as older initialized stdio clients. A plain

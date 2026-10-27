@@ -78,8 +78,19 @@ function clientFixture() {
   const calls = [];
   const client = {
     listTools: async () => ({
-      tools: Array.from({ length: 6 }, () => ({
-        annotations: { readOnlyHint: true },
+      tools: [
+        "execute_query",
+        "stream_query",
+        "list_tables",
+        "list_views",
+        "list_indexes",
+        "get_table_structure",
+      ].map((name) => ({
+        name,
+        annotations: {
+          readOnlyHint: !["execute_query", "stream_query"].includes(name),
+        },
+        _meta: { "com.hechtcarmel.vertica/readOnlyTransaction": true },
       })),
     }),
     callTool: async (request) => {

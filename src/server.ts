@@ -1,7 +1,7 @@
 import { DATABASE_CONSTANTS as limits } from "./constants/index.js";
 import { McpServer } from "@modelcontextprotocol/server";
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { z } from "zod";
+import { toolContracts } from "./tools/contracts.js";
 import type { VerticaConfig } from "./types/vertica.js";
 import { ConnectionManager } from "./services/connection-manager.js";
 import {
@@ -12,27 +12,6 @@ import {
 } from "./utils/response-formatter.js";
 import { readonlyStatement } from "./utils/sql.js";
 import { VERSION } from "./version.js";
-
-const identifier = z
-  .string()
-  .min(1)
-  .max(128)
-  .describe(
-    "Exact catalog name; case and spaces are preserved. Do not add SQL quotes.",
-  );
-const schemaName = identifier
-  .optional()
-  .describe("Schema name; defaults to VERTICA_DEFAULT_SCHEMA (public).");
-const sql = z
-  .string()
-  .min(1)
-  .refine((value) => value.trim().length > 0, "SQL cannot be blank")
-  .describe("One SQL statement. Use ? placeholders and params for values.");
-const params = z
-  .array(z.unknown())
-  .optional()
-  .describe("Values for ? placeholders, in order.");
-const outputSchema = z.looseObject({ success: z.boolean() });
 
 export function createServer(
   config: VerticaConfig,
@@ -46,15 +25,12 @@ export function createServer(
         "Use parameters for values and explicit ORDER BY for reproducible results. " +
         (config.readonlyMode === false
           ? "Write operations are enabled."
-          : "Read-only mode is enabled."),
+          : "Read-only mode is enabled.") +
+        " Arbitrary SQL functions can have side effects despite transaction checks; database grants apply. " +
+        "Database/policy failures set isError with success:false and error. Input/protocol failures may use SDK errors.",
     },
   );
-  const readAnnotations = {
-    readOnlyHint: true,
-    destructiveHint: false,
-    idempotentHint: true,
-    openWorldHint: false,
-  };
+  const contracts = toolContracts(config);
 
   async function run(
     operation: () => Promise<Record<string, unknown>>,
@@ -86,20 +62,7 @@ export function createServer(
 
   server.registerTool(
     "execute_query",
-    {
-      description:
-        config.readonlyMode === false
-          ? "Execute one SQL statement against Vertica. Write operations are enabled."
-          : "Execute one readonly SELECT, SHOW, DESCRIBE, EXPLAIN or WITH statement against Vertica.",
-      inputSchema: z.object({ sql, params }),
-      outputSchema,
-      annotations: {
-        ...readAnnotations,
-        readOnlyHint: config.readonlyMode !== false,
-        destructiveHint: config.readonlyMode === false,
-        idempotentHint: config.readonlyMode !== false,
-      },
-    },
+    contracts.execute_query,
     async (args, ctx) =>
       run(
         async () => {
@@ -122,23 +85,7 @@ export function createServer(
 
   server.registerTool(
     "stream_query",
-    {
-      description:
-        "Execute a SELECT/WITH query once and return bounded batches in one response. This is not incremental MCP transport streaming. Use ORDER BY for stable ordering.",
-      inputSchema: z.object({
-        sql,
-        params,
-        batchSize: z
-          .number()
-          .int()
-          .min(1)
-          .max(limits.MAX_BATCH_SIZE)
-          .default(limits.DEFAULT_BATCH_SIZE),
-        maxRows: z.number().int().min(1).max(limits.MAX_STREAM_ROWS).optional(),
-      }),
-      outputSchema,
-      annotations: readAnnotations,
-    },
+    contracts.stream_query,
     async (args, ctx) =>
       run(
         async () => {
@@ -186,78 +133,55 @@ export function createServer(
       ),
   );
 
-  server.registerTool(
-    "list_tables",
-    {
-      description: "List tables in a Vertica schema with metadata.",
-      inputSchema: z.object({ schemaName }),
-      outputSchema,
-      annotations: readAnnotations,
-    },
-    async (args, ctx) =>
-      run(
-        async () => {
-          const tables = await manager.withConnection(
-            (service) => service.listTables(args.schemaName, ctx.mcpReq.signal),
-            ctx.mcpReq.signal,
-          );
-          return {
-            success: true,
-            schema: args.schemaName ?? config.defaultSchema ?? "public",
-            tableCount: tables.length,
-            tables,
-            queriedAt: new Date().toISOString(),
-          };
-        },
-        { ...args },
-        "queriedAt",
-      ),
+  server.registerTool("list_tables", contracts.list_tables, async (args, ctx) =>
+    run(
+      async () => {
+        const tables = await manager.withConnection(
+          (service) => service.listTables(args.schemaName, ctx.mcpReq.signal),
+          ctx.mcpReq.signal,
+        );
+        return {
+          success: true,
+          schema: args.schemaName ?? config.defaultSchema ?? "public",
+          tableCount: tables.length,
+          tables,
+          queriedAt: new Date().toISOString(),
+        };
+      },
+      { ...args },
+      "queriedAt",
+    ),
   );
 
-  server.registerTool(
-    "list_views",
-    {
-      description:
-        "List views with definitions and metadata. definition preserves the legacy 200-character preview; fullDefinition contains the complete SQL.",
-      inputSchema: z.object({ schemaName }),
-      outputSchema,
-      annotations: readAnnotations,
-    },
-    async (args, ctx) =>
-      run(
-        async () => {
-          const views = await manager.withConnection(
-            (service) => service.listViews(args.schemaName, ctx.mcpReq.signal),
-            ctx.mcpReq.signal,
-          );
-          return {
-            success: true,
-            schema: args.schemaName ?? config.defaultSchema ?? "public",
-            viewCount: views.length,
-            views: views.map((view) => ({
-              ...view,
-              fullDefinition: view.definition,
-              definition:
-                view.definition.slice(0, 200) +
-                (view.definition.length > 200 ? "..." : ""),
-            })),
-            queriedAt: new Date().toISOString(),
-          };
-        },
-        { ...args },
-        "queriedAt",
-      ),
+  server.registerTool("list_views", contracts.list_views, async (args, ctx) =>
+    run(
+      async () => {
+        const views = await manager.withConnection(
+          (service) => service.listViews(args.schemaName, ctx.mcpReq.signal),
+          ctx.mcpReq.signal,
+        );
+        return {
+          success: true,
+          schema: args.schemaName ?? config.defaultSchema ?? "public",
+          viewCount: views.length,
+          views: views.map((view) => ({
+            ...view,
+            fullDefinition: view.definition,
+            definition:
+              view.definition.slice(0, 200) +
+              (view.definition.length > 200 ? "..." : ""),
+          })),
+          queriedAt: new Date().toISOString(),
+        };
+      },
+      { ...args },
+      "queriedAt",
+    ),
   );
 
   server.registerTool(
     "list_indexes",
-    {
-      description:
-        "List a table's Vertica projections, including columns and sort positions. Projections are physical storage structures, not traditional indexes.",
-      inputSchema: z.object({ tableName: identifier, schemaName }),
-      outputSchema,
-      annotations: readAnnotations,
-    },
+    contracts.list_indexes,
     async (args, ctx) =>
       run(
         async () => {
@@ -289,13 +213,7 @@ export function createServer(
 
   server.registerTool(
     "get_table_structure",
-    {
-      description:
-        "Get table columns, types, nullability, constraints, and ownership from Vertica catalogs.",
-      inputSchema: z.object({ tableName: identifier, schemaName }),
-      outputSchema,
-      annotations: readAnnotations,
-    },
+    contracts.get_table_structure,
     async (args, ctx) =>
       run(
         async () => {

@@ -33,8 +33,19 @@ function fixture() {
     }),
     getProtocolEra: () => era,
     listTools: vi.fn(async () => ({
-      tools: Array.from({ length: 6 }, () => ({
-        annotations: { readOnlyHint: true },
+      tools: [
+        "execute_query",
+        "stream_query",
+        "list_tables",
+        "list_views",
+        "list_indexes",
+        "get_table_structure",
+      ].map((name) => ({
+        name,
+        annotations: {
+          readOnlyHint: !["execute_query", "stream_query"].includes(name),
+        },
+        _meta: { "com.hechtcarmel.vertica/readOnlyTransaction": true },
       })),
     })),
     callTool: vi.fn(async ({ name, arguments: { sql } }) => {
@@ -151,6 +162,19 @@ describe("safe incremental diagnostics", () => {
   ])("returns only an allowlisted category for %j", (error, category) => {
     expect(classifyFailure(error)).toBe(category);
     expect(JSON.stringify(failureReport(error))).not.toContain(privateMarker);
+  });
+  it("requires explicit read-only transaction configuration instead of trusting a query hint", async () => {
+    const client = fixture();
+    const original = await client.listTools();
+    for (const tool of original.tools) {
+      tool.annotations.readOnlyHint = true;
+      tool._meta["com.hechtcarmel.vertica/readOnlyTransaction"] = false;
+    }
+    client.listTools.mockResolvedValue(original);
+    await expect(runReadOnlySmoke(client)).rejects.toThrow(
+      "readonly_mode_not_confirmed",
+    );
+    expect(client.callTool).not.toHaveBeenCalled();
   });
   it("emits the started stage while the operation is still pending", async () => {
     const client = fixture();

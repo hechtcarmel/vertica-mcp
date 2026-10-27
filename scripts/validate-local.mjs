@@ -218,16 +218,35 @@ export async function runReadOnlySmoke(client, options = {}) {
     "tool_discovery",
     async () => {
       const tools = (await client.listTools()).tools;
+      const queryNames = ["execute_query", "stream_query"];
+      const catalogNames = [
+        "list_tables",
+        "list_views",
+        "list_indexes",
+        "get_table_structure",
+      ];
+      const byName = new Map((tools ?? []).map((tool) => [tool.name, tool]));
+      const readonlyTransactions = queryNames.every(
+        (name) =>
+          byName.get(name)?._meta?.[
+            "com.hechtcarmel.vertica/readOnlyTransaction"
+          ] === true,
+      );
+      const readonlyCatalogs = catalogNames.every(
+        (name) => byName.get(name)?.annotations?.readOnlyHint === true,
+      );
       if (
         tools?.length !== 6 ||
-        !tools.every((tool) => tool.annotations?.readOnlyHint === true)
+        byName.size !== 6 ||
+        !readonlyTransactions ||
+        !readonlyCatalogs
       ) {
         throw new ValidationFailure(
           "tool_discovery",
           "readonly_mode_not_confirmed",
         );
       }
-      checks.push("tool discovery and read-only annotations");
+      checks.push("tool discovery and read-only transaction configuration");
     },
     options,
   );

@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport } from "@modelcontextprotocol/client";
 import { createServer } from "../src/server.js";
+import {
+  outputSchemas,
+  READONLY_TRANSACTION_META_KEY,
+} from "../src/tools/contracts.js";
 import { ConnectionManager } from "../src/services/connection-manager.js";
 import { config, result, setup } from "./helpers.js";
 const cleanups: (() => Promise<void>)[] = [];
@@ -41,12 +45,88 @@ describe("MCP compatibility", () => {
     for (const tool of tools) {
       expect(tool.inputSchema.type).toBe("object");
       expect(tool.outputSchema).toBeDefined();
-      expect(tool.annotations?.readOnlyHint).toBe(true);
+      const isQuery = ["execute_query", "stream_query"].includes(tool.name);
+      expect(tool.annotations?.readOnlyHint).toBe(!isQuery);
+      expect(tool.annotations?.destructiveHint).toBe(isQuery);
+      expect(tool.annotations?.idempotentHint).toBe(!isQuery);
+      expect(tool.annotations?.openWorldHint).toBe(isQuery);
+      if (isQuery)
+        expect(tool._meta?.[READONLY_TRANSACTION_META_KEY]).toBe(true);
     }
     expect(
       tools.find((t) => t.name === "execute_query")?.inputSchema.required,
     ).toEqual(["sql"]);
     expect(factory).not.toHaveBeenCalled();
+  });
+  it("advertises accurate selection guidance, input descriptions and complete output envelopes", async () => {
+    const { client } = await connect();
+    const { tools } = await client.listTools();
+    const byName = new Map(tools.map((tool) => [tool.name, tool]));
+    for (const tool of tools) {
+      expect(tool.title).toEqual(expect.any(String));
+      expect(tool.description!.length).toBeLessThan(500);
+      expect(tool.inputSchema.additionalProperties).toBe(false);
+      for (const property of Object.values(tool.inputSchema.properties ?? {})) {
+        expect((property as { description?: string }).description).toEqual(
+          expect.any(String),
+        );
+      }
+      expect(tool.outputSchema?.type).toBe("object");
+      const branches = tool.outputSchema?.oneOf as { required: string[] }[];
+      expect(branches).toHaveLength(2);
+      expect(branches[0]?.required).toContain("success");
+      expect(branches[1]?.required).toContain("error");
+    }
+    expect(byName.get("execute_query")?.description).toMatch(/no row cap/);
+    expect(byName.get("execute_query")?.description).toMatch(
+      /Read-only.*enabled/,
+    );
+    expect(byName.get("stream_query")?.description).toMatch(/subquery/);
+    expect(byName.get("stream_query")?.description).toMatch(
+      /no cursor or incremental streaming/,
+    );
+    expect(byName.get("list_tables")?.description).toMatch(
+      /without pagination/,
+    );
+    expect(byName.get("list_views")?.description).toMatch(
+      /200-character preview/,
+    );
+    expect(byName.get("list_indexes")?.description).toMatch(
+      /not a uniqueness proof/,
+    );
+    expect(byName.get("get_table_structure")?.description).toMatch(
+      /absent or invisible/,
+    );
+    const batchProperties = byName.get("stream_query")?.inputSchema
+      .properties as Record<string, Record<string, unknown>>;
+    expect(batchProperties.batchSize).toMatchObject({
+      default: 1000,
+      minimum: 1,
+      maximum: 10000,
+    });
+    expect(batchProperties.maxRows?.description).toMatch(/batchSize \* 100/);
+    expect(batchProperties.maxRows).toMatchObject({
+      minimum: 1,
+      maximum: 1000000,
+    });
+  });
+  it("rejects incomplete or mistyped structured outputs and accepts actual failure envelopes", () => {
+    expect(() =>
+      outputSchemas.execute_query.parse({
+        success: true,
+        executedAt: new Date().toISOString(),
+      }),
+    ).toThrow();
+    expect(() =>
+      outputSchemas.stream_query.parse({ success: true, totalRows: "3" }),
+    ).toThrow();
+    expect(() =>
+      outputSchemas.list_tables.parse({
+        success: false,
+        error: "not available",
+        queriedAt: new Date().toISOString(),
+      }),
+    ).not.toThrow();
   });
   it.each(["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"])(
     "negotiates existing protocol %s",
@@ -79,6 +159,9 @@ describe("MCP compatibility", () => {
       arguments: { sql: "SELECT 1" },
     });
     expect(response.isError).toBe(false);
+    expect(() =>
+      outputSchemas.execute_query.parse(response.structuredContent),
+    ).not.toThrow();
     expect(response.content).toEqual([
       {
         type: "text",
@@ -98,6 +181,12 @@ describe("MCP compatibility", () => {
     { name: "execute_query", arguments: { sql: "SELECT 1; DROP TABLE t" } },
     { name: "execute_query", arguments: { sql: " " } },
     { name: "execute_query", arguments: { params: [] } },
+    { name: "execute_query", arguments: { sql: "SELECT 1", maxRows: 1 } },
+    {
+      name: "stream_query",
+      arguments: { sql: "SELECT 1", cursor: "unsupported" },
+    },
+    { name: "list_tables", arguments: { page: 1 } },
     { name: "stream_query", arguments: { sql: "SELECT 1", batchSize: 0 } },
     { name: "get_table_structure", arguments: {} },
     { name: "list_indexes", arguments: { tableName: "" } },
@@ -134,6 +223,9 @@ describe("MCP compatibility", () => {
       error: expect.stringContaining("[REDACTED]"),
     });
     expect(JSON.stringify(response)).not.toContain(config.password);
+    expect(() =>
+      outputSchemas.execute_query.parse(response.structuredContent),
+    ).not.toThrow();
   });
   it("preserves metadata envelopes, names with spaces, and full view definitions", async () => {
     const { client, driver } = await connect();
@@ -145,6 +237,37 @@ describe("MCP compatibility", () => {
             table_schema: "Mixed Case",
             table_name: "Order Detail",
             owner_name: "u",
+          },
+        ]);
+      if (sql.includes("FROM v_catalog.columns"))
+        return result([
+          {
+            column_name: "id",
+            data_type: "int",
+            is_nullable: true,
+            column_default: null,
+            character_maximum_length: "128",
+            numeric_scale: null,
+            ordinal_position: 1,
+          },
+        ]);
+      if (sql.includes("FROM v_catalog.constraint_columns"))
+        return result([
+          {
+            constraint_name: "pk",
+            constraint_type: "p",
+            column_name: "id",
+            reference_table_name: null,
+            reference_column_name: null,
+          },
+        ]);
+      if (sql.includes("FROM v_catalog.projection_columns"))
+        return result([
+          {
+            index_name: "p",
+            column_name: "id",
+            is_key_constraint_projection: true,
+            sort_position: null,
           },
         ]);
       if (sql.includes("FROM v_catalog.views"))
@@ -162,6 +285,9 @@ describe("MCP compatibility", () => {
       name: "list_tables",
       arguments: { schemaName: "Mixed Case" },
     });
+    expect(() =>
+      outputSchemas.list_tables.parse(tables.structuredContent),
+    ).not.toThrow();
     expect(tables.structuredContent).toMatchObject({
       success: true,
       schema: "Mixed Case",
@@ -173,6 +299,9 @@ describe("MCP compatibility", () => {
       name: "list_views",
       arguments: { schemaName: "Mixed Case" },
     });
+    expect(() =>
+      outputSchemas.list_views.parse(views.structuredContent),
+    ).not.toThrow();
     expect(views.structuredContent).toMatchObject({
       viewCount: 1,
       views: [
@@ -186,22 +315,50 @@ describe("MCP compatibility", () => {
       name: "list_indexes",
       arguments: { tableName: "Order Detail" },
     });
+    expect(() =>
+      outputSchemas.list_indexes.parse(indexes.structuredContent),
+    ).not.toThrow();
     expect(indexes.structuredContent).toMatchObject({
       success: true,
       table: "Order Detail",
       schema: "public",
-      indexCount: 0,
-      indexes: [],
+      indexCount: 1,
+      indexes: [
+        {
+          indexName: "p",
+          columnName: "id",
+          isUnique: true,
+          ordinalPosition: null,
+        },
+      ],
     });
     const structure = await client.callTool({
       name: "get_table_structure",
       arguments: { tableName: "Order Detail", schemaName: "Mixed Case" },
     });
+    expect(() =>
+      outputSchemas.get_table_structure.parse(structure.structuredContent),
+    ).not.toThrow();
     expect(structure.structuredContent).toMatchObject({
       success: true,
       table: { tableName: "Order Detail" },
-      columns: [],
-      constraints: [],
+      columns: [
+        {
+          name: "id",
+          nullable: true,
+          defaultValue: null,
+          size: "128",
+          decimalDigits: null,
+        },
+      ],
+      constraints: [
+        {
+          name: "pk",
+          type: "p",
+          referencedTable: null,
+          referencedColumn: null,
+        },
+      ],
     });
   });
   it("reports exact batch counts and truncation with the legacy response shape", async () => {
@@ -215,6 +372,9 @@ describe("MCP compatibility", () => {
       name: "stream_query",
       arguments: { sql: "SELECT n FROM t", batchSize: 2, maxRows: 3 },
     });
+    expect(() =>
+      outputSchemas.stream_query.parse(response.structuredContent),
+    ).not.toThrow();
     expect(response.structuredContent).toMatchObject({
       success: true,
       query: "SELECT n FROM t",
@@ -239,6 +399,16 @@ describe("MCP compatibility", () => {
     });
     expect(
       tools.find((t) => t.name === "stream_query")?.annotations?.readOnlyHint,
-    ).toBe(true);
+    ).toBe(false);
+    expect(
+      tools.find((tool) => tool.name === "execute_query")?._meta?.[
+        READONLY_TRANSACTION_META_KEY
+      ],
+    ).toBe(false);
+    expect(
+      tools.find((tool) => tool.name === "stream_query")?._meta?.[
+        READONLY_TRANSACTION_META_KEY
+      ],
+    ).toBe(false);
   });
 });

@@ -93,6 +93,19 @@ Results retain the original JSON text in `content` and also provide matching
 `structuredContent`. Database and policy failures set MCP `isError: true` and
 `success: false`. Discovery and help/version commands do not connect to Vertica.
 
+Input schemas reject unknown argument names, including unsupported pagination or
+row-limit options. Use only the declared arguments. Output schemas distinguish
+success from failure and describe rows, fields, metadata, counts, and truncation.
+`execute_query.rowCount` counts returned result rows, not affected rows for writes;
+`list_indexes.indexCount` counts projection-column entries, not distinct projections.
+
+Catalog tools advertise read-only behavior for their fixed queries. Both arbitrary
+SQL tools use conservative annotations: functions may have side effects, so the
+server does not claim purity, idempotence, or a closed interaction world. This does
+not disable the default read-only policy. Their
+`_meta["com.hechtcarmel.vertica/readOnlyTransaction"]` reports whether read-only
+transactions are configured. See the [tool-contract review](docs/TOOL_CONTRACTS.md).
+
 ### Batching large results
 
 ```json

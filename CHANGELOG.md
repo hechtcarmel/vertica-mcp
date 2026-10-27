@@ -44,6 +44,11 @@
   and read-only restrictions are unchanged.
 - Cover the reported Node 24.3.0 runtime in CI.
 
+- Review all six tool contracts against the implementation and current MCP docs:
+  concise selection guidance, named inputs and limits, typed success/error output
+  schemas, and conservative annotations for arbitrary SQL functions. Expose the
+  configured read-only transaction policy separately for validation.
+
 ### Deliberate behavior corrections
 
 - Read-only mode rejects stacked statements, write-capable CTEs, SELECT INTO,
@@ -51,6 +56,8 @@
   read-only transaction. The conservative guard can reject unusual valid SQL;
   quoted identifiers and bound values avoid keyword ambiguity. It does not prove
   that every function is side-effect free; database privileges remain necessary.
+- Unsupported tool argument names are rejected instead of silently ignored; no
+  undeclared pagination or execute-query row limit is implied.
 - Each tool call accepts one statement, including with writes explicitly enabled.
   Multi-statement scripts should be split into individual calls.
 - All Boolean settings parse `true`/`false`/`1`/`0` consistently and reject typos.
